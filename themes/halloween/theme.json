@@ -1,0 +1,117 @@
+{
+  "id": "halloween",
+  "name": "할로윈 유령전",
+  "desc": "도깨비불은 안개를 뚫고 휘어진다",
+  "palette": {
+    "bg": "#120a18",
+    "hud": "#3a2250",
+    "accent": "#ff8a2a",
+    "p1": "#ff8a2a",
+    "p2": "#b46bff",
+    "text": "#f5e8ff",
+    "enemy": "#d8d0e8",
+    "brick": "#8a8a9a",
+    "explosion": [
+      "#fff6d0",
+      "#ff8a2a",
+      "#b46bff",
+      "#3a1a50"
+    ]
+  },
+  "labels": {
+    "enemy": "유령",
+    "base": "제단 촛불",
+    "stage": "밤",
+    "unit": "마차",
+    "title": "PUMPKIN",
+    "tagline": "할로윈 유령전 · 도깨비불"
+  },
+  "rules": {
+    "kind": "homing",
+    "speed": 0.85,
+    "homing": 10,
+    "range": 10,
+    "cancel": true
+  },
+  "traits": {
+    "basic": "phase",
+    "ice": "slide"
+  },
+  "sfx": {
+    "fire": "fire_halloween",
+    "explode": "explode_halloween",
+    "explodeBig": "explodeBig"
+  },
+  "cell": 32,
+  "shotCell": 16,
+  "rotate": true,
+  "sheets": {
+    "tiles": "sheets/tiles.svg",
+    "units": "sheets/units.svg",
+    "shot": "sheets/shot.svg",
+    "items": "sheets/items.svg",
+    "base": "sheets/base.svg",
+    "fx": "sheets/fx.svg"
+  },
+  "frames": {
+    "tiles": {
+      "brick": 0,
+      "steel": 1,
+      "water0": 2,
+      "water1": 3,
+      "bush": 4,
+      "ice": 5
+    },
+    "units": {
+      "p1": [
+        0,
+        1
+      ],
+      "p2": [
+        2,
+        3
+      ],
+      "basic": [
+        4,
+        5
+      ],
+      "fast": [
+        6,
+        7
+      ],
+      "power": [
+        8,
+        9
+      ],
+      "armor": [
+        10,
+        11
+      ]
+    },
+    "shot": {
+      "s0": 0,
+      "s1": 1
+    },
+    "items": {
+      "grenade": 0,
+      "helmet": 1,
+      "clock": 2,
+      "shovel": 3,
+      "star": 4,
+      "tank": 5
+    },
+    "base": {
+      "alive": 0,
+      "dead": 1
+    },
+    "fx": {
+      "spawn0": 0,
+      "spawn1": 1,
+      "spawn2": 2,
+      "spawn3": 3,
+      "shield0": 4,
+      "shield1": 5,
+      "flag": 6
+    }
+  }
+}

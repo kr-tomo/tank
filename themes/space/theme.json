@@ -1,0 +1,117 @@
+{
+  "id": "space",
+  "name": "우주 함대전",
+  "desc": "레이저는 즉시 닿고, 장갑에서 튕긴다",
+  "palette": {
+    "bg": "#05070f",
+    "hud": "#1e2a44",
+    "accent": "#3fa9f5",
+    "p1": "#3fa9f5",
+    "p2": "#35d6a0",
+    "text": "#e6f0ff",
+    "enemy": "#8a93a6",
+    "brick": "#c04be0",
+    "explosion": [
+      "#ffffff",
+      "#9fe0ff",
+      "#3fa9f5",
+      "#1a2a6b"
+    ]
+  },
+  "labels": {
+    "enemy": "적 함선",
+    "base": "모선 코어",
+    "stage": "섹터",
+    "unit": "전투기",
+    "title": "STARFIGHT",
+    "tagline": "미래 우주전 · 레이저"
+  },
+  "rules": {
+    "kind": "beam",
+    "range": 7,
+    "overheat": 0.5,
+    "reflect": true,
+    "cancel": false
+  },
+  "traits": {
+    "fast": "dodge",
+    "ice": "inertia"
+  },
+  "sfx": {
+    "fire": "fire_space",
+    "explode": "explode_space",
+    "explodeBig": "explodeBig"
+  },
+  "cell": 32,
+  "shotCell": 16,
+  "rotate": true,
+  "sheets": {
+    "tiles": "sheets/tiles.svg",
+    "units": "sheets/units.svg",
+    "shot": "sheets/shot.svg",
+    "items": "sheets/items.svg",
+    "base": "sheets/base.svg",
+    "fx": "sheets/fx.svg"
+  },
+  "frames": {
+    "tiles": {
+      "brick": 0,
+      "steel": 1,
+      "water0": 2,
+      "water1": 3,
+      "bush": 4,
+      "ice": 5
+    },
+    "units": {
+      "p1": [
+        0,
+        1
+      ],
+      "p2": [
+        2,
+        3
+      ],
+      "basic": [
+        4,
+        5
+      ],
+      "fast": [
+        6,
+        7
+      ],
+      "power": [
+        8,
+        9
+      ],
+      "armor": [
+        10,
+        11
+      ]
+    },
+    "shot": {
+      "s0": 0,
+      "s1": 1
+    },
+    "items": {
+      "grenade": 0,
+      "helmet": 1,
+      "clock": 2,
+      "shovel": 3,
+      "star": 4,
+      "tank": 5
+    },
+    "base": {
+      "alive": 0,
+      "dead": 1
+    },
+    "fx": {
+      "spawn0": 0,
+      "spawn1": 1,
+      "spawn2": 2,
+      "spawn3": 3,
+      "shield0": 4,
+      "shield1": 5,
+      "flag": 6
+    }
+  }
+}

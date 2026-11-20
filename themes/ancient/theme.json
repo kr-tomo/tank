@@ -1,0 +1,117 @@
+{
+  "id": "ancient",
+  "name": "고대 투석기전",
+  "desc": "벽 너머로 돌을 던진다",
+  "palette": {
+    "bg": "#2a2117",
+    "hud": "#6b5536",
+    "accent": "#e0b35a",
+    "p1": "#d93b2b",
+    "p2": "#2f6fd0",
+    "text": "#f3e6c8",
+    "enemy": "#8a7a62",
+    "brick": "#9c6b3a",
+    "explosion": [
+      "#fff0c8",
+      "#d9a441",
+      "#8c5a24",
+      "#3b2a18"
+    ]
+  },
+  "labels": {
+    "enemy": "적 공성 부대",
+    "base": "왕기",
+    "stage": "전장",
+    "unit": "투석기",
+    "title": "CATAPULT",
+    "tagline": "고대 공성전 · 투석기"
+  },
+  "rules": {
+    "kind": "arc",
+    "speed": 0.75,
+    "cooldown": 0.6,
+    "cancel": false,
+    "range": 8
+  },
+  "traits": {
+    "armor": "crush",
+    "ice": "mud"
+  },
+  "sfx": {
+    "fire": "fire_ancient",
+    "explode": "explode_ancient",
+    "explodeBig": "explodeBig"
+  },
+  "cell": 32,
+  "shotCell": 16,
+  "rotate": true,
+  "sheets": {
+    "tiles": "sheets/tiles.svg",
+    "units": "sheets/units.svg",
+    "shot": "sheets/shot.svg",
+    "items": "sheets/items.svg",
+    "base": "sheets/base.svg",
+    "fx": "sheets/fx.svg"
+  },
+  "frames": {
+    "tiles": {
+      "brick": 0,
+      "steel": 1,
+      "water0": 2,
+      "water1": 3,
+      "bush": 4,
+      "ice": 5
+    },
+    "units": {
+      "p1": [
+        0,
+        1
+      ],
+      "p2": [
+        2,
+        3
+      ],
+      "basic": [
+        4,
+        5
+      ],
+      "fast": [
+        6,
+        7
+      ],
+      "power": [
+        8,
+        9
+      ],
+      "armor": [
+        10,
+        11
+      ]
+    },
+    "shot": {
+      "s0": 0,
+      "s1": 1
+    },
+    "items": {
+      "grenade": 0,
+      "helmet": 1,
+      "clock": 2,
+      "shovel": 3,
+      "star": 4,
+      "tank": 5
+    },
+    "base": {
+      "alive": 0,
+      "dead": 1
+    },
+    "fx": {
+      "spawn0": 0,
+      "spawn1": 1,
+      "spawn2": 2,
+      "spawn3": 3,
+      "shield0": 4,
+      "shield1": 5,
+      "flag": 6
+    }
+  }
+}

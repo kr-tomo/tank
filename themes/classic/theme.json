@@ -1,0 +1,115 @@
+{
+  "id": "classic",
+  "name": "클래식 탱크전",
+  "desc": "1985년 그대로, 더 매끈하게",
+  "palette": {
+    "bg": "#0b0b0e",
+    "hud": "#5c5c66",
+    "accent": "#f2c230",
+    "p1": "#f2c230",
+    "p2": "#49b86a",
+    "text": "#f4f1ea",
+    "enemy": "#b8bcc4",
+    "brick": "#c8632a",
+    "explosion": [
+      "#fff4c2",
+      "#ffb347",
+      "#ff5a1f",
+      "#6b2e10"
+    ]
+  },
+  "labels": {
+    "enemy": "적 탱크",
+    "base": "본진",
+    "stage": "STAGE",
+    "unit": "탱크",
+    "title": "TANK",
+    "tagline": "배틀 시티 1985 · 현대화"
+  },
+  "rules": {
+    "kind": "straight",
+    "speed": 1,
+    "cooldown": 0,
+    "cancel": true
+  },
+  "traits": {
+    "ice": "slide"
+  },
+  "sfx": {
+    "fire": "fire_classic",
+    "explode": "explode",
+    "explodeBig": "explodeBig"
+  },
+  "cell": 32,
+  "shotCell": 16,
+  "rotate": true,
+  "sheets": {
+    "tiles": "sheets/tiles.svg",
+    "units": "sheets/units.svg",
+    "shot": "sheets/shot.svg",
+    "items": "sheets/items.svg",
+    "base": "sheets/base.svg",
+    "fx": "sheets/fx.svg"
+  },
+  "frames": {
+    "tiles": {
+      "brick": 0,
+      "steel": 1,
+      "water0": 2,
+      "water1": 3,
+      "bush": 4,
+      "ice": 5
+    },
+    "units": {
+      "p1": [
+        0,
+        1
+      ],
+      "p2": [
+        2,
+        3
+      ],
+      "basic": [
+        4,
+        5
+      ],
+      "fast": [
+        6,
+        7
+      ],
+      "power": [
+        8,
+        9
+      ],
+      "armor": [
+        10,
+        11
+      ]
+    },
+    "shot": {
+      "s0": 0,
+      "s1": 1
+    },
+    "items": {
+      "grenade": 0,
+      "helmet": 1,
+      "clock": 2,
+      "shovel": 3,
+      "star": 4,
+      "tank": 5
+    },
+    "base": {
+      "alive": 0,
+      "dead": 1
+    },
+    "fx": {
+      "spawn0": 0,
+      "spawn1": 1,
+      "spawn2": 2,
+      "spawn3": 3,
+      "shield0": 4,
+      "shield1": 5,
+      "flag": 6
+    }
+  }
+}

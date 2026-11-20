@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b0b0e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TANK">
+<title>TANK</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="safe"></div>
+<div id="stage" hidden></div>
+<div id="controls" hidden></div>
+<button id="pauseBtn" class="hud-btn" hidden aria-label="일시정지">❚❚</button>
+<button id="exitBtn" class="hud-btn" hidden aria-label="메뉴로 나가기">⌂</button>
+
+<section id="title" class="screen">
+  <div class="title-art"><img src="icons/icon.svg" alt=""><h1>TANK</h1></div>
+  <p class="tagline">배틀 시티 1985 · 현대화 <small id="version"></small></p>
+  <div class="menu">
+    <button data-mode="1p">1인 플레이</button>
+    <button data-mode="coop">2인 협동</button>
+    <button data-mode="versus">2인 대전</button>
+    <button data-mode="editor">맵 편집</button>
+  </div>
+  <p class="hint" id="padHint"></p>
+</section>
+
+<section id="setup" class="screen" hidden>
+  <header><button class="back" aria-label="뒤로">◀</button><h2>게임 설정</h2><span class="mode-label"></span></header>
+  <div class="themes"></div>
+  <div class="row" id="stageRow">
+    <span class="label">시작 스테이지</span>
+    <button id="stagePrev" class="toggle small">◀</button><span id="stageNum" class="num">1</span><button id="stageNext" class="toggle small">▶</button>
+    <button id="customBtn" class="toggle">내 맵: 없음</button>
+  </div>
+  <div class="row" id="versusRow" hidden>
+    <span class="label">대전 맵</span>
+    <button id="mapPrev" class="toggle small">◀</button><span id="mapName" class="num">평원</span><button id="mapNext" class="toggle small">▶</button>
+    <button id="timeBtn" class="toggle">제한 시간: 없음</button>
+  </div>
+  <footer>
+    <button id="soundBtn" class="toggle">소리 켜짐</button>
+    <button id="startBtn" class="primary">시작</button>
+  </footer>
+</section>
+
+<section id="maps" class="screen" hidden>
+  <header><button class="back" aria-label="뒤로">◀</button><h2>내 맵</h2><span class="mode-label"></span></header>
+  <div class="row">
+    <button id="newCoopBtn" class="toggle">새 맵 · 협동</button>
+    <button id="newVersusBtn" class="toggle">새 맵 · 대전</button>
+    <button id="importBtn" class="toggle">가져오기</button>
+  </div>
+  <div class="maplist"></div>
+</section>
+
+<section id="pickMap" class="screen overlay" hidden>
+  <h2>내 맵 고르기</h2>
+  <div class="maplist pick"></div>
+  <div class="menu"><button id="pickNoneBtn">기본 스테이지로</button><button id="pickCancelBtn">닫기</button></div>
+</section>
+
+<div id="editorBar" hidden>
+  <div class="tools"></div>
+  <button id="brushBtn" class="toggle">작은 붓</button>
+  <input id="mapNameInput" type="text" maxlength="20" placeholder="맵 이름">
+  <button id="saveMapBtn" class="primary">저장</button>
+  <button id="testMapBtn" class="toggle">시험 플레이</button>
+  <button id="clearMapBtn" class="toggle">비우기</button>
+  <button id="exitEditorBtn" class="toggle">나가기</button>
+</div>
+
+<section id="pause" class="screen overlay" hidden>
+  <h2>일시정지</h2>
+  <div class="menu"><button id="resumeBtn">계속하기</button><button id="quitBtn">메뉴로</button></div>
+</section>
+<section id="confirm" class="screen overlay" hidden>
+  <h2>메뉴로 나갈까요?</h2>
+  <div class="menu"><button id="cancelQuitBtn">계속하기</button><button id="confirmQuitBtn">나가기</button></div>
+</section>
+<section id="textbox" class="screen overlay" hidden>
+  <h2 id="textboxTitle">맵 데이터</h2>
+  <textarea id="textboxArea" spellcheck="false"></textarea>
+  <div class="menu"><button id="textboxOk">확인</button><button id="textboxCancel">닫기</button></div>
+</section>
+
+<div id="loading">불러오는 중…</div>
+<div id="fatal" hidden><b>오류가 났습니다</b><pre></pre><button id="reloadBtn">앱 새로 받기</button></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
