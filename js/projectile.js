@@ -5,7 +5,7 @@ import { U, SHOT, UNIT, BULLET, MAX_LEVEL } from './config.js';
 import { DIRS, cellsAt, overlaps } from './units.js';
 
 export const STAR_DEFAULT = {
-  straight: { 1: { speed: 1.5 }, 2: { shots: 2 }, 3: { steel: true, depth: 2 } },
+  straight: { 1: { speed: 1.5 }, 2: { cooldownMul: 0.5 }, 3: { steel: true, depth: 2 } },
   homing:   { 1: { speed: 1.5 }, 2: { shots: 2 }, 3: { steel: true, depth: 2 } },
   arc:      { 1: { cooldownMul: 0.6 }, 2: { rangeBonus: 2, splash: 3 }, 3: { steel: true } },
   beam:     { 1: { overheat: 0.3 }, 2: { burst: 2 }, 3: { steel: true, pierce: true } }
@@ -64,6 +64,7 @@ function canFire(unit, rules, world, fx) {
     if ((unit.heatUntil || 0) > now + EPS) return false;
     return true;
   }
+  if (rules.kind === 'straight') return true;   // shells fire at a fixed interval (the cooldown), however many are flying
   const max = fx.shots || 1;
   const inFlight = world.shots.filter(s => s.owner === unit && s.alive).length;
   return inFlight < max;
@@ -77,7 +78,7 @@ export function fire(unit, rules, world) {
     kind: rules.kind, owner: unit, team: unit.team, dir: unit.dir, x: f.x, y: f.y, w: SHOT, h: SHOT,
     alive: true, t: 0, steel: !!fx.steel, depth: fx.depth || 1, cancel: rules.cancel, level: unit.level || 0
   };
-  const cooldown = (rules.cooldown || 0) * (fx.cooldownMul ?? 1);
+  const cooldown = (rules.cooldown || 0) * (fx.cooldownMul ?? 1) * (unit.enemy ? 2 : 1);
   if (cooldown) unit.cooldownUntil = world.time + cooldown;
   const fast = unit.role === 'power' || fx.speed;
   p.speed = (fast ? BULLET.fast : BULLET.normal) * (rules.speed || 1);

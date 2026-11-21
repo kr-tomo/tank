@@ -11,6 +11,7 @@ const TYPE_OF = { b: 'basic', f: 'fast', p: 'power', a: 'armor' };
 const FIRE_REPEAT = 0.15;
 const PHASE_PERIOD = 2;
 const CRUSH_TIME = 0.5;
+const HIT_GRACE = 1;        // damage mode: seconds of invulnerability after a hit
 const tileCenter = ([tx, ty]) => ({ x: tx * TILE + TILE / 2, y: ty * TILE + TILE / 2 });
 
 // mulberry32
@@ -21,8 +22,9 @@ export function rng(seed = Date.now() % 2147483647) {
 
 export class World {
   // { mode, grid, players, wave:'bbff…', rules, traits, timeLimit, seed, stage }
-  constructor({ mode = 'coop', grid, players = 1, wave = '', rules = makeRules(), traits = {}, timeLimit = 0, seed, stage = 1, carry = null }) {
-    Object.assign(this, { mode, grid, rules, traits, stage, time: 0, phase: 'play', phaseT: 0, winner: null, events: [] });
+  // lives: 3..10 or Infinity; hitMode: 'destroy' (a hit blows the tank up, the next one rolls in) | 'damage' (a hit costs a life, the tank stays)
+  constructor({ mode = 'coop', grid, players = 1, wave = '', rules = makeRules(), traits = {}, timeLimit = 0, seed, stage = 1, carry = null, lives = LIVES, hitMode = 'destroy' }) {
+    Object.assign(this, { mode, grid, rules, traits, stage, hitMode, time: 0, phase: 'play', phaseT: 0, winner: null, events: [] });
     this.rand = rng(seed);
     this.units = []; this.shots = []; this.items = [];
     this.wave = [...wave].map(c => TYPE_OF[c] || 'basic');
@@ -30,7 +32,7 @@ export class World {
     this.frozenT = 0; this.shovelT = 0; this.itemT = VERSUS_ITEM_INTERVAL;
     this.timeLeft = timeLimit || 0;
     this.bases = grid.bases.map((b, i) => ({ cx: b.cx, cy: b.cy, team: mode === 'versus' ? i : 0, alive: true }));
-    this.players = Array.from({ length: players }, (_, i) => ({ index: i, unit: null, lives: carry?.[i]?.lives ?? LIVES, score: carry?.[i]?.score ?? 0, level: carry?.[i]?.level ?? 0, kills: { basic: 0, fast: 0, power: 0, armor: 0 }, respawnT: 0, fireT: 0 }));
+    this.players = Array.from({ length: players }, (_, i) => ({ index: i, unit: null, lives: carry?.[i]?.lives ?? lives, score: carry?.[i]?.score ?? 0, level: carry?.[i]?.level ?? 0, kills: { basic: 0, fast: 0, power: 0, armor: 0 }, respawnT: 0, fireT: 0 }));
     this.players.forEach(p => { if (p.lives > 0) { this.spawnPlayer(p.index, true); p.unit.level = p.level; } });
   }
 
@@ -189,6 +191,13 @@ export class World {
     }
     if (u.shieldT > 0) { this.emit('ricochet', { unit: u, x: ev.x, y: ev.y }); return; }
     if (shot.team === u.team) { u.stunT = STUN_TIME; this.emit('stun', { unit: u }); return; }
+    const p = this.players[u.player];
+    if (this.hitMode === 'damage' && (p.lives === Infinity || p.lives > 1)) {
+      if (p.lives !== Infinity) p.lives--;
+      u.shieldT = HIT_GRACE;
+      this.emit('playerHit', { unit: u, player: u.player, x: ev.x, y: ev.y });
+      return;
+    }
     this.killPlayer(u.player);
   }
 

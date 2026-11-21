@@ -1,6 +1,8 @@
 // Precache the whole app per version and serve only from that cache, so files of two versions
 // never mix. A new version arrives by changing CACHE (kept equal to js/version.js APP_VERSION by a test).
-const CACHE = 'tank-v2';
+// BUILD is stamped by tools/dist.mjs so every release installs a fresh cache even if the version number repeats
+const BUILD = '2026-11-21T06:30';
+const CACHE = 'tank-v3-' + BUILD;
 const THEMES = ['classic', 'ancient', 'space', 'halloween'];
 const SFX = ['fire_classic', 'fire_ancient', 'fire_space', 'fire_halloween', 'hit', 'brick', 'steel', 'ricochet', 'explode', 'explodeBig',
   'explode_ancient', 'explode_space', 'explode_halloween', 'spawn', 'item', 'pickup', 'life', 'pause', 'select', 'move', 'stageStart', 'gameOver',

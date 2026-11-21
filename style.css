@@ -70,8 +70,8 @@ body.editing #stage { pointer-events: auto; cursor: crosshair; }
 .screen.overlay { background: rgba(5, 4, 8, .72); z-index: 10; }
 .screen h1 { font-size: calc(var(--u) * 9); margin: 0; letter-spacing: .12em; color: var(--accent); text-shadow: 0 4px 0 #6b4a00, 0 0 24px rgba(242,194,48,.35); }
 .screen h2 { margin: 0; font-size: calc(var(--u) * 3.2); }
-.title-art { display: flex; align-items: center; gap: calc(var(--u) * 3); }
-.title-art img { width: calc(var(--u) * 10); height: calc(var(--u) * 10); }
+.title-art { display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 1.5); }
+.title-art img.logo { width: calc(var(--u) * 26); height: calc(var(--u) * 26); border-radius: 22%; box-shadow: 0 10px 40px rgba(255,138,42,.25), 0 0 0 2px rgba(255,255,255,.08); }
 .tagline { margin: 0; color: var(--muted); font-size: calc(var(--u) * 2); }
 .tagline small { opacity: .5; margin-left: 8px; }
 .hint { color: var(--muted); font-size: calc(var(--u) * 1.6); margin: 0; min-height: 1.2em; text-align: center; }

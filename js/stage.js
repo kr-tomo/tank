@@ -98,6 +98,7 @@ class PlayScene extends Phaser.Scene {
     this.ready = false; this.acc = 0; this.t = 0; this.gridDirty = true; this.waterPhase = 0; this.tickSoundT = 0;
     this.unitSprites = new Map(); this.shotSprites = new Map(); this.itemSprites = new Map(); this.texts = [];
     this.lastPhase = 'play'; this.curtainT = 0; this.resultShown = false;
+    this.beams = []; this.tally = null; this.loadToken = (this.loadToken || 0) + 1;
   }
 
   create() {
@@ -109,10 +110,11 @@ class PlayScene extends Phaser.Scene {
     const land = this.view.orientation === 'landscape';
     this.mapX = 0; this.mapY = land ? 0 : HUD_TOP;
     this.hudRect = land ? { x: this.world.grid.width, y: 0, w: HUD_SIDE, h: this.view.h } : { x: 0, y: 0, w: this.view.w, h: HUD_TOP };
+    const token = this.loadToken;
     loadSheets(this, this.theme, this.scale.width / this.view.w).then(sheets => {
-      if (!this.sys.isActive() && !this.sys.isPaused()) return;
+      if (token !== this.loadToken || (!this.sys.isActive() && !this.sys.isPaused())) return;   // a restart overtook this load
       this.sheets = sheets; this.build(); this.ready = true;
-    });
+    }).catch(e => window.__fatal?.(`sheets: ${e?.stack || e}`));
   }
 
   fitCamera() {
@@ -242,7 +244,7 @@ class PlayScene extends Phaser.Scene {
     const w = this.world;
     const left = w.enemiesLeft;
     this.hudEnemyIcons.forEach((s, i) => s.setVisible(w.mode === 'coop' && i < left));
-    this.hudLives.forEach(({ t }, i) => t.setText(`×${Math.max(0, w.players[i].lives)}`));
+    this.hudLives.forEach(({ t }, i) => t.setText(w.players[i].lives === Infinity ? '×∞' : `×${Math.max(0, w.players[i].lives)}`));
     this.hudStage.setText(`${this.stageIndex + 1}`);
     this.hudScore.forEach((t, i) => t.setText(String(w.players[i].score).padStart(6, '0')));
     // status gauges under each life counter: laser heat (space), shield time, ghost phase timer
@@ -284,6 +286,10 @@ class PlayScene extends Phaser.Scene {
   /* ---------- the loop ---------- */
   update(time, delta) {
     if (!this.ready) return;
+    try { this.step(delta); } catch (e) { if (!this.reported) { this.reported = true; console.error(e); window.__fatal?.(`play: ${e?.stack || e}`); } }
+  }
+
+  step(delta) {
     const dt = Math.min(0.05, delta / 1000);
     this.t += dt;
     if (this.curtainT > 0) { this.curtainT -= dt; this.drawCurtain(); if (this.curtainT > 0.9) { this.syncAll(dt); return; } }
@@ -537,6 +543,15 @@ class PlayScene extends Phaser.Scene {
         case 'shovel': this.gridDirty = true; break;
         case 'phase': case 'solidify': this.fx.wisp.explode(10, e.unit.x, e.unit.y); this.sfx('phase', { volume: 0.3, rate: e.type === 'phase' ? 1 : 0.7 }); break;
         case 'playerDie': cam.flash(120, 255, 120, 120); break;
+        case 'playerHit': {
+          const s = this.unitSprites.get(e.unit);
+          this.fx.spark.explode(16, e.x, e.y); this.flashStar(e.x, e.y, 1.0, 0xffb0a0); this.ring(e.unit.x, e.unit.y, 0xff5a3a, 1.2);
+          cam.shake(160, 0.008); cam.flash(90, 255, 80, 60);
+          if (s) this.tweens.add({ targets: s.spr, alpha: 0.25, duration: 70, yoyo: true, repeat: 5 });
+          this.popText('-1', e.unit.x, e.unit.y - 22, '#ff8a7a', 15);
+          this.sfx('hit', { volume: 0.7, rate: 0.8 });
+          break;
+        }
       }
     }
   }

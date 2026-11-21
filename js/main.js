@@ -32,7 +32,9 @@ const store = {
   load() { try { return JSON.parse(localStorage.getItem('tank.settings')) || {}; } catch { return {}; } },
   save(v) { try { localStorage.setItem('tank.settings', JSON.stringify(v)); } catch { /* storage unavailable */ } }
 };
-const settings = Object.assign({ mode: '1p', theme: 'classic', stage: 1, versusMap: 0, versusTime: 0, sound: true, customMap: null }, store.load());
+// lives: 3..10, or 0 for ∞; hitMode: 'destroy' | 'damage'
+const settings = Object.assign({ mode: '1p', theme: 'classic', stage: 1, versusMap: 0, versusTime: 0, sound: true, customMap: null, lives: 3, hitMode: 'destroy' }, store.load());
+const LIVES_STEPS = [3, 4, 5, 6, 7, 8, 9, 10, 0];
 const mapStore = new MapStore();
 
 let themes = {}, stage, input, nav, world = null, paused = false, activeScreen = 'title', playing = false, editing = false;
@@ -131,6 +133,8 @@ function buildSetup() {
   $('#mapNext').onclick = () => { settings.versusMap = (settings.versusMap + 1) % VERSUS_MAPS.length; settings.customMap = null; refreshSetup(); };
   $('#timeBtn').onclick = () => { settings.versusTime = VERSUS_TIMES[(VERSUS_TIMES.indexOf(settings.versusTime) + 1) % VERSUS_TIMES.length]; refreshSetup(); };
   $('#soundBtn').onclick = () => { settings.sound = !settings.sound; stage.setMuted(!settings.sound); refreshSetup(); };
+  $('#livesBtn').onclick = () => { settings.lives = LIVES_STEPS[(LIVES_STEPS.indexOf(settings.lives) + 1) % LIVES_STEPS.length]; refreshSetup(); };
+  $('#hitBtn').onclick = () => { settings.hitMode = settings.hitMode === 'damage' ? 'destroy' : 'damage'; refreshSetup(); };
   $('#startBtn').onclick = () => startGame();
   for (const b of $$('.back')) b.onclick = () => show('title');
 }
@@ -147,6 +151,8 @@ function refreshSetup() {
   $('#mapName').textContent = custom && versus ? custom.name : VERSUS_MAPS[settings.versusMap].name;
   $('#timeBtn').textContent = `제한 시간: ${settings.versusTime ? settings.versusTime / 60 + '분' : '없음'}`;
   $('#soundBtn').textContent = settings.sound ? '소리 켜짐' : '소리 꺼짐';
+  $('#livesBtn').textContent = `목숨: ${settings.lives === 0 ? '∞' : settings.lives}`;
+  $('#hitBtn').textContent = settings.hitMode === 'damage' ? '피격: 데미지' : '피격: 파괴';
   store.save(settings);
 }
 
@@ -248,7 +254,7 @@ function buildWorld() {
   if (customDef) { grid = Grid.parseHalf(customDef.tiles, Grid.parse(STAGES[0].map, 'coop').bases); if (customDef.mode === 'versus') grid = Grid.parseHalf(customDef.tiles, Grid.parse(VERSUS_MAPS[0].map, 'versus').bases); wave = versus ? '' : STAGES[Math.min(stageIndex, STAGES.length - 1)].wave; name = customDef.name; }
   else if (versus) { const m = VERSUS_MAPS[settings.versusMap]; grid = parseStage(m, 'versus').grid; name = m.name; }
   else { const s = STAGES[stageIndex % STAGES.length]; ({ grid, wave } = parseStage(s, 'coop')); name = ''; }
-  world = new World({ mode: versus ? 'versus' : 'coop', grid, players: input.players, wave, rules: makeRules(theme.rules), traits: theme.traits || {}, timeLimit: versus ? settings.versusTime : 0, carry });
+  world = new World({ mode: versus ? 'versus' : 'coop', grid, players: input.players, wave, rules: makeRules(theme.rules), traits: theme.traits || {}, timeLimit: versus ? settings.versusTime : 0, carry, lives: settings.lives === 0 ? Infinity : settings.lives, hitMode: settings.hitMode });
   return { world, theme, name };
 }
 

@@ -30,7 +30,7 @@
   "rules": {
     "kind": "straight",
     "speed": 1,
-    "cooldown": 0,
+    "cooldown": 0.35,
     "cancel": true
   },
   "traits": {
