@@ -73,7 +73,7 @@ function onNav(action, src, repeat) {
   let cur = items.indexOf(document.activeElement);
   if (cur < 0) { setFocus(items[0]); return true; }
   if (['up', 'down', 'left', 'right'].includes(action)) {
-    const rects = items.map(b => b.getBoundingClientRect());
+    const rects = items.map(b => { const r = b.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
     const next = pickNext(rects, cur, action);
     if (next !== cur) { setFocus(items[next]); stage.play('move', { volume: 0.25 }); }
     return true;
@@ -98,14 +98,32 @@ function buildTitle() {
   };
 }
 
+// one frame of a theme sheet as a DOM crop (PNG sheets are drawn at theme.scales[sheet] px per logical px)
+function frameImg(t, sheetName, i, size = null) {
+  const cell = t.cells?.[sheetName] ?? (sheetName === 'shot' ? t.shotCell : t.cell), k = t.scales?.[sheetName] || 1, z = size ? size / cell : 1;
+  return `<span class="fr" style="width:${cell * z}px;height:${cell * z}px"><img src="themes/${t.id}/${t.sheets[sheetName]}" alt="" style="object-fit:none;object-position:-${i * cell * k}px 0;width:${cell * k}px;height:${cell * k}px;transform:scale(${z / k});transform-origin:0 0"></span>`;
+}
+
+// theme card: a mini diorama (bricks, steel, the base, P1) over the theme's colors, plus its rule badge
 function themeCard(id) {
-  const t = themes[id];
-  return `<button class="theme" data-theme="${id}"><img src="themes/${id}/sheets/units.svg" alt="" style="object-fit:none;object-position:0 0;width:32px;height:32px;transform:scale(2);margin:16px 0"><b>${t.name}</b><small>${t.desc}</small></button>`;
+  const t = themes[id], fr = t.frames;
+  return `<button class="theme" data-theme="${id}" style="--tbg:${t.palette.bg};--thud:${t.palette.hud};--tacc:${t.palette.accent}">
+    <span class="dio">${frameImg(t, 'tiles', fr.tiles.brick)}${frameImg(t, 'tiles', fr.tiles.steel)}${frameImg(t, 'base', fr.base.alive, 36)}${frameImg(t, 'units', fr.units.p1[0], 36)}${frameImg(t, 'tiles', fr.tiles.bush)}</span>
+    <b>${t.name}</b><small>${t.desc}</small><span class="badge">${t.labels.rule || t.rules.kind}</span></button>`;
+}
+
+// the selected theme's palette drives the whole UI (borders, focus rings, backgrounds)
+function applyPalette(id) {
+  const p = themes[id]?.palette;
+  if (!p) return;
+  const r = document.documentElement.style;
+  r.setProperty('--bg', p.bg); r.setProperty('--hud', p.hud); r.setProperty('--accent', p.accent); r.setProperty('--p1', p.p1); r.setProperty('--p2', p.p2); r.setProperty('--text', p.text);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', p.bg);
 }
 
 function buildSetup() {
   $('.themes').innerHTML = THEME_IDS.map(themeCard).join('');
-  for (const b of $$('.theme')) b.onclick = () => { settings.theme = b.dataset.theme; refreshSetup(); stage.play('select', { volume: 0.4 }); };
+  for (const b of $$('.theme')) b.onclick = () => { settings.theme = b.dataset.theme; applyPalette(settings.theme); refreshSetup(); stage.play('select', { volume: 0.4 }); };
   $('#stagePrev').onclick = () => { settings.stage = (settings.stage + STAGES.length - 2) % STAGES.length + 1; settings.customMap = null; refreshSetup(); };
   $('#stageNext').onclick = () => { settings.stage = settings.stage % STAGES.length + 1; settings.customMap = null; refreshSetup(); };
   $('#customBtn').onclick = () => openPick('coop');
@@ -287,7 +305,7 @@ function openEditor(model, id, name) {
 
 function buildEditorBar() {
   const theme = themes[settings.theme];
-  $('#editorBar .tools').innerHTML = TOOLS.map(t => `<button data-tool="${t}" title="${TOOL_NAMES[t]}">${t === 'erase' ? '✕' : `<img src="themes/${theme.id}/sheets/tiles.svg" alt="" style="object-fit:none;object-position:-${theme.frames.tiles[t === 'water' ? 'water0' : t] * 32}px 0;width:32px;height:32px">`}</button>`).join('');
+  $('#editorBar .tools').innerHTML = TOOLS.map(t => `<button data-tool="${t}" title="${TOOL_NAMES[t]}">${t === 'erase' ? '✕' : frameImg(theme, 'tiles', theme.frames.tiles[t === 'water' ? 'water0' : t])}</button>`).join('');
   for (const b of $$('#editorBar .tools button')) b.onclick = () => { editor.tool = b.dataset.tool; refreshEditorBar(); };
   $('#brushBtn').onclick = () => { editor.toggleBrush(); refreshEditorBar(); };
   $('#saveMapBtn').onclick = saveMap;
@@ -338,6 +356,12 @@ function bindEditorPointer() {
   for (const ev of ['pointerup', 'pointercancel']) addEventListener(ev, () => { down = false; });
 }
 
+// the fire button projects the current theme's shot sprite over its label
+function fireHtml(r) {
+  const t = themes[settings.theme], size = Math.max(28, Math.round(r * 0.9));
+  return `<span class="shot">${frameImg(t, 'shot', 0, size)}</span><span class="lbl">발사</span>`;
+}
+
 /* ---------- layout ---------- */
 function safeInsets() {
   const cs = getComputedStyle($('#safe'));
@@ -360,8 +384,9 @@ function onResize() {
   const v = layout.view, dpr = Math.min(devicePixelRatio || 1, 3);
   Object.assign(stageEl.style, { left: `${il + v.x}px`, top: `${it + v.y}px`, width: `${v.w}px`, height: `${v.h}px` });
   try { stage.resize(Math.round(v.w * dpr), Math.round(v.h * dpr)); } catch (e) { report('resize', e); }
+  controls.classList.toggle('overlay', layout.mode === 'side');   // side clusters may ride over the view's edge
   controls.innerHTML = layout.buttons.map(b =>
-    `<div class="pad p${b.player} a-${b.action}" data-player="${b.player}" data-action="${b.action}" style="left:${il + b.x - b.r}px;top:${it + b.y - b.r}px;width:${b.r * 2}px;height:${b.r * 2}px;font-size:${Math.round(b.r * 0.5)}px">${b.action === 'dpad' ? DPAD_HTML : '발사'}</div>`).join('');
+    `<div class="pad p${b.player} a-${b.action}" data-player="${b.player}" data-action="${b.action}" style="left:${il + b.x - b.r}px;top:${it + b.y - b.r}px;width:${b.r * 2}px;height:${b.r * 2}px;font-size:${Math.round(b.r * 0.5)}px">${b.action === 'dpad' ? DPAD_HTML : fireHtml(b.r)}</div>`).join('');
   // pause / exit buttons live in the HUD strip: stacked mid-right in landscape, side by side at the
   // right end of the top strip in portrait
   const hudRight = view.orientation === 'landscape', k = v.w / view.w;
@@ -441,6 +466,7 @@ async function boot() {
   nav = new MenuNav(onNav);
   requestAnimationFrame(frame);
   buildTitle(); buildSetup(); buildMaps(); bindEditorPointer();
+  applyPalette(settings.theme);
   refreshSetup();
   preventZoom();
   pauseBtn.onclick = () => setPaused(true);

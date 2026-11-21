@@ -11,7 +11,8 @@ export const MODES = {
 };
 export const FORTRESS_TILES = 1;  // ring of tiles around the base where theme specials are off
 
-export const SPEED = { p1: 110, p2: 110, basic: 80, fast: 160, power: 110, armor: 80 };
+// enemies move at 0.8× the original pace (difficulty tuning)
+export const SPEED = { p1: 110, p2: 110, basic: 64, fast: 128, power: 88, armor: 64 };
 export const BULLET = { normal: 320, fast: 480 };
 export const ENEMY_HP = { basic: 1, fast: 1, power: 1, armor: 4 };
 export const ENEMY_TYPES = ['basic', 'fast', 'power', 'armor'];

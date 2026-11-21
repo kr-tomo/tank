@@ -10,7 +10,7 @@
     "p2": "#2f6fd0",
     "text": "#f3e6c8",
     "enemy": "#8a7a62",
-    "brick": "#9c6b3a",
+    "brick": "#c9b08a",
     "explosion": [
       "#fff0c8",
       "#d9a441",
@@ -24,7 +24,8 @@
     "stage": "전장",
     "unit": "투석기",
     "title": "CATAPULT",
-    "tagline": "고대 공성전 · 투석기"
+    "tagline": "고대 공성전 · 투석기",
+    "rule": "포물선"
   },
   "rules": {
     "kind": "arc",
@@ -46,12 +47,26 @@
   "shotCell": 16,
   "rotate": true,
   "sheets": {
-    "tiles": "sheets/tiles.svg",
+    "tiles": "sheets/tiles.png",
     "units": "sheets/units.svg",
     "shot": "sheets/shot.svg",
-    "items": "sheets/items.svg",
-    "base": "sheets/base.svg",
-    "fx": "sheets/fx.svg"
+    "items": "sheets/items.png",
+    "base": "sheets/base.png",
+    "fx": "sheets/fx.png"
+  },
+  "cells": {
+    "tiles": 32,
+    "units": 32,
+    "shot": 16,
+    "items": 32,
+    "base": 40,
+    "fx": 32
+  },
+  "scales": {
+    "tiles": 4,
+    "items": 4,
+    "base": 4,
+    "fx": 4
   },
   "frames": {
     "tiles": {

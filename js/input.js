@@ -1,8 +1,7 @@
 // Touch buttons, keyboard and gamepads merged into per-player input (ported from versus).
 // Actions: up down left right fire start select.
 export const DPAD_DIAGONAL = 80;
-export const DPAD_RANGE_MOD = 1.5;
-export const HAPTIC_MS = 10;
+export const HAPTIC_MS = 12;           // fire tick with one player on touch
 const NO_DIRS = Object.freeze({ up: false, down: false, left: false, right: false });
 
 export function dpadSlopes(sensitivity = DPAD_DIAGONAL) {
@@ -18,6 +17,13 @@ export function dpadDirs(dx, dy, { low, high } = SLOPES) {
   if (!ax && !ay) return NO_DIRS;
   const vert = ay > low * ax, horiz = ay < high * ax;
   return { up: vert && dy < 0, down: vert && dy > 0, left: horiz && dx < 0, right: horiz && dx > 0 };
+}
+
+// A finger that started on the D-pad keeps pressing until it lifts: wherever it is now, the
+// direction (one or two keys) is read from its angle around the pad center. rect: the pad's box.
+export function dpadAim(rect, x, y) {
+  const R = rect.width / 2;
+  return dpadDirs(x - rect.left - R, y - rect.top - R);
 }
 
 const blank = () => ({ up: false, down: false, left: false, right: false, fire: false, start: false, select: false, a: false, b: false, x: false, y: false });
@@ -65,18 +71,14 @@ export class InputManager {
     addEventListener('gamepaddisconnected', () => this.pollPads());
   }
 
-  // RetroArch-style overlay D-pad: direction from the angle to the center, hitbox grows while held.
+  // RetroArch-style overlay D-pad: direction from the angle to the center; the press lasts until the finger lifts.
   bindTouch(layer) {
     const hit = (x, y) => {
       const el = document.elementFromPoint(x, y)?.closest('[data-action]');
       return el && !el.classList.contains('off') ? el : null;
     };
     const aim = (st, e) => {
-      const r = st.el.getBoundingClientRect(), R = r.width / 2;
-      const dx = (e.clientX - r.left - R) / R, dy = (e.clientY - r.top - R) / R;
-      const reach = st.on ? DPAD_RANGE_MOD : 1;
-      st.on = Math.abs(dx) <= reach && Math.abs(dy) <= reach;
-      st.dirs = st.on ? dpadDirs(dx, dy) : NO_DIRS;
+      st.dirs = dpadAim(st.el.getBoundingClientRect(), e.clientX, e.clientY);
       st.el.dataset.dirs = Object.keys(st.dirs).filter(k => st.dirs[k]).join(' ');
     };
     layer.addEventListener('pointerdown', e => {
@@ -85,7 +87,7 @@ export class InputManager {
       if (!el) return;
       try { el.setPointerCapture(e.pointerId); } catch { /* not supported */ }
       if (el.dataset.action === 'dpad') {
-        const st = { player: +el.dataset.player, el, on: false, dirs: NO_DIRS };
+        const st = { player: +el.dataset.player, el, on: true, dirs: NO_DIRS };
         this.dpads.set(e.pointerId, st);
         aim(st, e);
       } else {

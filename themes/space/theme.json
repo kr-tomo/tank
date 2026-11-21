@@ -7,10 +7,10 @@
     "hud": "#1e2a44",
     "accent": "#3fa9f5",
     "p1": "#3fa9f5",
-    "p2": "#35d6a0",
+    "p2": "#b46bff",
     "text": "#e6f0ff",
     "enemy": "#8a93a6",
-    "brick": "#c04be0",
+    "brick": "#4fd8ff",
     "explosion": [
       "#ffffff",
       "#9fe0ff",
@@ -24,7 +24,8 @@
     "stage": "섹터",
     "unit": "전투기",
     "title": "STARFIGHT",
-    "tagline": "미래 우주전 · 레이저"
+    "tagline": "미래 우주전 · 레이저",
+    "rule": "레이저"
   },
   "rules": {
     "kind": "beam",
@@ -46,12 +47,28 @@
   "shotCell": 16,
   "rotate": true,
   "sheets": {
-    "tiles": "sheets/tiles.svg",
-    "units": "sheets/units.svg",
-    "shot": "sheets/shot.svg",
-    "items": "sheets/items.svg",
-    "base": "sheets/base.svg",
-    "fx": "sheets/fx.svg"
+    "tiles": "sheets/tiles.png",
+    "units": "sheets/units.png",
+    "shot": "sheets/shot.png",
+    "items": "sheets/items.png",
+    "base": "sheets/base.png",
+    "fx": "sheets/fx.png"
+  },
+  "cells": {
+    "tiles": 32,
+    "units": 48,
+    "shot": 16,
+    "items": 32,
+    "base": 40,
+    "fx": 32
+  },
+  "scales": {
+    "tiles": 4,
+    "units": 4,
+    "shot": 4,
+    "items": 4,
+    "base": 4,
+    "fx": 4
   },
   "frames": {
     "tiles": {

@@ -10,7 +10,7 @@
     "p2": "#b46bff",
     "text": "#f5e8ff",
     "enemy": "#d8d0e8",
-    "brick": "#8a8a9a",
+    "brick": "#8a9a8a",
     "explosion": [
       "#fff6d0",
       "#ff8a2a",
@@ -22,9 +22,10 @@
     "enemy": "유령",
     "base": "제단 촛불",
     "stage": "밤",
-    "unit": "마차",
+    "unit": "호박 전차",
     "title": "PUMPKIN",
-    "tagline": "할로윈 유령전 · 도깨비불"
+    "tagline": "할로윈 유령전 · 도깨비불",
+    "rule": "유도불"
   },
   "rules": {
     "kind": "homing",
@@ -46,12 +47,28 @@
   "shotCell": 16,
   "rotate": true,
   "sheets": {
-    "tiles": "sheets/tiles.svg",
-    "units": "sheets/units.svg",
-    "shot": "sheets/shot.svg",
-    "items": "sheets/items.svg",
-    "base": "sheets/base.svg",
-    "fx": "sheets/fx.svg"
+    "tiles": "sheets/tiles.png",
+    "units": "sheets/units.png",
+    "shot": "sheets/shot.png",
+    "items": "sheets/items.png",
+    "base": "sheets/base.png",
+    "fx": "sheets/fx.png"
+  },
+  "cells": {
+    "tiles": 32,
+    "units": 48,
+    "shot": 16,
+    "items": 32,
+    "base": 40,
+    "fx": 32
+  },
+  "scales": {
+    "tiles": 4,
+    "units": 4,
+    "shot": 4,
+    "items": 4,
+    "base": 4,
+    "fx": 4
   },
   "frames": {
     "tiles": {

@@ -1,8 +1,7 @@
 // Precache the whole app per version and serve only from that cache, so files of two versions
 // never mix. A new version arrives by changing CACHE (kept equal to js/version.js APP_VERSION by a test).
-const CACHE = 'tank-v1';
+const CACHE = 'tank-v2';
 const THEMES = ['classic', 'ancient', 'space', 'halloween'];
-const SHEETS = ['tiles', 'units', 'shot', 'items', 'base', 'fx'];
 const SFX = ['fire_classic', 'fire_ancient', 'fire_space', 'fire_halloween', 'hit', 'brick', 'steel', 'ricochet', 'explode', 'explodeBig',
   'explode_ancient', 'explode_space', 'explode_halloween', 'spawn', 'item', 'pickup', 'life', 'pause', 'select', 'move', 'stageStart', 'gameOver',
   'win', 'tick', 'shield', 'shovel', 'freeze', 'stun', 'score', 'land', 'beam', 'phase'];
@@ -11,12 +10,20 @@ const PRECACHE = [
   './', 'index.html', 'style.css', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-180.png',
   ...JS.map(m => `js/${m}.js`),
   'vendor/phaser-4.2.1.esm.min.js',
-  ...SFX.map(n => `sfx/${n}.wav`),
-  ...THEMES.flatMap(t => [`themes/${t}/theme.json`, ...SHEETS.map(s => `themes/${t}/sheets/${s}.svg`)])
+  ...SFX.map(n => `sfx/${n}.wav`)
 ];
+// each theme.json names its own sheets (PNG cut from the artwork or SVG)
+async function themeFiles() {
+  const out = [];
+  for (const t of THEMES) {
+    const j = await (await fetch(`themes/${t}/theme.json`, { cache: 'reload' })).json();
+    out.push(`themes/${t}/theme.json`, ...Object.values(j.sheets).map(s => `themes/${t}/${s}`));
+  }
+  return out;
+}
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
+  e.waitUntil((async () => { const c = await caches.open(CACHE); const list = [...PRECACHE, ...await themeFiles()]; await c.addAll(list.map(u => new Request(u, { cache: 'reload' }))); await self.skipWaiting(); })());
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));

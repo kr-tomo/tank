@@ -24,7 +24,8 @@
     "stage": "STAGE",
     "unit": "탱크",
     "title": "TANK",
-    "tagline": "배틀 시티 1985 · 현대화"
+    "tagline": "배틀 시티 1985 · 현대화",
+    "rule": "직선탄"
   },
   "rules": {
     "kind": "straight",
@@ -44,12 +45,26 @@
   "shotCell": 16,
   "rotate": true,
   "sheets": {
-    "tiles": "sheets/tiles.svg",
-    "units": "sheets/units.svg",
+    "tiles": "sheets/tiles.png",
+    "units": "sheets/units.png",
     "shot": "sheets/shot.svg",
-    "items": "sheets/items.svg",
-    "base": "sheets/base.svg",
+    "items": "sheets/items.png",
+    "base": "sheets/base.png",
     "fx": "sheets/fx.svg"
+  },
+  "cells": {
+    "tiles": 32,
+    "units": 48,
+    "shot": 16,
+    "items": 32,
+    "base": 40,
+    "fx": 32
+  },
+  "scales": {
+    "tiles": 4,
+    "units": 4,
+    "items": 4,
+    "base": 4
   },
   "frames": {
     "tiles": {

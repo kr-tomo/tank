@@ -7,8 +7,9 @@ import { DIRS, freeAt } from './units.js';
 const OPP = { up: 'down', down: 'up', left: 'right', right: 'left' };
 const SIDES = { up: ['left', 'right'], down: ['left', 'right'], left: ['up', 'down'], right: ['up', 'down'] };
 const SIGHT = 10;        // half cells an enemy looks ahead before firing
-const REACTION = 2.5;    // chance per second to fire at a player in sight
-const BASE_REACTION = 0.8; // …and at the base (the original's enemies mostly wander and shoot at random)
+// enemy fire rate tuned to 0.8× (difficulty)
+const REACTION = 2.0;      // chance per second to fire at a player in sight
+const BASE_REACTION = 0.64; // …and at the base (the original's enemies mostly wander and shoot at random)
 const DODGE_RANGE = 6 * UNIT;
 
 const front = u => ({ x: u.x + DIRS[u.dir][0] * UNIT / 2, y: u.y + DIRS[u.dir][1] * UNIT / 2 });
@@ -77,6 +78,6 @@ export function decide(e, world, dt) {
   let shoot = false;
   const hit = raycast(world.grid, world.units, front(e), dir, SIGHT, { target: u => u.team !== e.team && !u.dead && u.player !== undefined, base: true });
   if (hit.kind === 'unit' || hit.kind === 'base') shoot = ai.sure || world.rand() < (hit.kind === 'base' ? BASE_REACTION : REACTION) * dt;
-  else { ai.fireT -= dt; if (ai.fireT <= 0) { shoot = true; ai.fireT = 2 * (0.5 + world.rand()); } }
+  else { ai.fireT -= dt; if (ai.fireT <= 0) { shoot = true; ai.fireT = 2.5 * (0.5 + world.rand()); } }
   return { dir, fire: shoot };
 }

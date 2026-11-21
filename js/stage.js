@@ -57,18 +57,20 @@ class BootScene extends Phaser.Scene {
 // Rasterizes the theme's SVG sheets at the screen scale and registers frames. Shared by both scenes.
 export async function loadSheets(scene, theme, px) {
   const base = theme.base, cell = theme.cell, k0 = clamp(px, 1, 3);
-  const sheet = async (url, want) => {
+  // SVG sheets rasterize at the screen scale; PNG sheets are already drawn at theme.scales[n] px per logical px
+  const sheet = async (url, want, fixed) => {
     const img = await loadImage(url);
-    const k = Math.max(0.5, quant(Math.min(want, MAX_TEX / Math.max(img.naturalWidth, img.naturalHeight))));
-    const r = await rasterize(url, k), key = `${url}@${k}`;
+    const k = fixed || Math.max(0.5, quant(Math.min(want, MAX_TEX / Math.max(img.naturalWidth, img.naturalHeight))));
+    const r = await rasterize(url, fixed ? 1 : k), key = `${url}@${k}`;
     if (!scene.textures.exists(key)) scene.textures.addCanvas(key, r.canvas);
     return { key, k, tex: scene.textures.get(key) };
   };
   const names = Object.keys(theme.sheets);
-  const loaded = await Promise.all(names.map(n => sheet(base + theme.sheets[n], k0)));
+  const loaded = await Promise.all(names.map(n => sheet(base + theme.sheets[n], k0, theme.scales?.[n])));
   const out = {};
   names.forEach((n, i) => {
-    const s = loaded[i], c = n === 'shot' ? theme.shotCell : cell;
+    const s = loaded[i], c = cellOf(theme, n);
+    s.cell = c;
     const add = (name, x, y, w, h) => { if (!s.tex.has(name)) s.tex.add(name, 0, x * s.k, y * s.k, w * s.k, h * s.k); };
     for (const [name, idx] of Object.entries(theme.frames[n])) {
       const list = Array.isArray(idx) ? idx : [idx];
@@ -83,6 +85,9 @@ export async function loadSheets(scene, theme, px) {
   });
   return out;
 }
+
+// logical cell size of a sheet (units and the base may use bigger cells than the 32px tile)
+export const cellOf = (theme, n) => theme.cells?.[n] ?? (n === 'shot' ? theme.shotCell : theme.cell);
 
 class PlayScene extends Phaser.Scene {
   constructor() { super('play'); }
@@ -162,6 +167,8 @@ class PlayScene extends Phaser.Scene {
     // dim + banner above everything
     this.dim = this.add.rectangle(0, 0, this.view.w, this.view.h, 0x000000).setOrigin(0).setDepth(40).setAlpha(0);
     this.curtains = [0, 1].map(i => this.add.rectangle(0, i ? this.view.h : 0, this.view.w, 0, hex(th.palette.hud)).setOrigin(0, i).setDepth(45));
+    // metal shutter slats drawn over the curtains
+    this.shutter = this.add.graphics().setDepth(45.5);
     this.banner = this.text(this.view.w / 2, this.view.h / 2, '', 30, th.palette.text, { stroke: '#000', strokeThickness: 5 }).setOrigin(0.5).setDepth(46);
     this.bannerSub = this.text(this.view.w / 2, this.view.h / 2 + 34, '', 16, th.palette.accent, { stroke: '#000', strokeThickness: 4 }).setOrigin(0.5).setDepth(46);
     this.buildHud();
@@ -176,17 +183,27 @@ class PlayScene extends Phaser.Scene {
     this.hudBg = this.add.graphics().setDepth(20);
     this.hudBg.fillStyle(hex(th.palette.hud), 1).fillRect(x, y, w, h);
     this.hudBg.fillStyle(0x000000, 0.25).fillRect(x, y, w, h);
+    // bevel: accent line along the map edge, three inset panels (enemies / players / stage)
+    const acc = hex(th.palette.accent);
+    if (land) {
+      this.hudBg.fillStyle(acc, 0.8).fillRect(x, y, 2, h).fillStyle(0xffffff, 0.08).fillRect(x + 2, y, 1, h);
+      for (const [py, ph] of [[8, h * 0.5], [h * 0.5 + 16, h * 0.22], [h * 0.74 + 8, h * 0.26 - 16]]) this.hudBg.fillStyle(0x000000, 0.22).fillRoundedRect(x + 8, y + py, w - 14, ph, 4).lineStyle(1, 0xffffff, 0.08).strokeRoundedRect(x + 8, y + py, w - 14, ph, 4);
+    } else {
+      this.hudBg.fillStyle(acc, 0.8).fillRect(x, y + h - 2, w, 2).fillStyle(0xffffff, 0.08).fillRect(x, y + h - 3, w, 1);
+      for (const [px, pw] of [[6, 176], [188, 110], [w - 160, 154]]) this.hudBg.fillStyle(0x000000, 0.22).fillRoundedRect(x + px, y + 6, pw, h - 14, 4).lineStyle(1, 0xffffff, 0.08).strokeRoundedRect(x + px, y + 6, pw, h - 14, 4);
+    }
+    this.gauges = this.add.graphics().setDepth(22);
     const c = n => this.add.container(0, 0).setDepth(21);
     this.hud = { enemies: c(), lives: c(), stage: c(), score: c() };
     this.hudEnemyIcons = [];
     const n = this.world.wave.length;
     for (let i = 0; i < n; i++) {
-      const s = this.add.image(0, 0, sh.units.key, 'basic_0').setScale(0.5 / sh.units.k);
+      const s = this.add.image(0, 0, sh.units.key, 'basic_0').setScale(16 / sh.units.cell / sh.units.k);
       this.hud.enemies.add(s); this.hudEnemyIcons.push(s);
     }
     const ps = this.world.players;
     this.hudLives = ps.map((p, i) => {
-      const icon = this.add.image(0, 0, sh.units.key, `p${i + 1}_0`).setScale(0.5 / sh.units.k);
+      const icon = this.add.image(0, 0, sh.units.key, `p${i + 1}_0`).setScale(16 / sh.units.cell / sh.units.k);
       const t = this.text(0, 0, '', 13, th.palette.text).setOrigin(0, 0.5);
       this.hud.lives.add([icon, t]);
       return { icon, t };
@@ -228,6 +245,18 @@ class PlayScene extends Phaser.Scene {
     this.hudLives.forEach(({ t }, i) => t.setText(`×${Math.max(0, w.players[i].lives)}`));
     this.hudStage.setText(`${this.stageIndex + 1}`);
     this.hudScore.forEach((t, i) => t.setText(String(w.players[i].score).padStart(6, '0')));
+    // status gauges under each life counter: laser heat (space), shield time, ghost phase timer
+    this.gauges.clear();
+    this.hudLives.forEach(({ icon }, i) => {
+      const u = w.players[i].unit;
+      if (!u) return;
+      let frac = 0, col = 0xffffff;
+      if (this.theme.rules.kind === 'beam') { const left = (u.heatUntil || 0) - w.time; frac = clamp(left / (this.theme.rules.overheat || 0.5), 0, 1); col = 0xff6a3a; }
+      if (u.shieldT > 0) { frac = clamp(u.shieldT / 10, 0, 1); col = 0x9fe0ff; }
+      if (frac <= 0) return;
+      const gx = icon.x - 8, gy = icon.y + 11, gw = 44;
+      this.gauges.fillStyle(0x000000, 0.45).fillRoundedRect(gx, gy, gw, 4, 2).fillStyle(col, 0.95).fillRoundedRect(gx, gy, gw * frac, 4, 2);
+    });
     if (w.mode === 'versus') this.hudTime.setText(w.timeLeft > 0 ? `${Math.floor(w.timeLeft / 60)}:${String(Math.ceil(w.timeLeft % 60)).padStart(2, '0')}` : '∞');
     else this.hudTime.setText('');
   }
@@ -277,10 +306,14 @@ class PlayScene extends Phaser.Scene {
     // closes fast, holds, opens: height goes 0→full in the first 0.3s, full until 0.9, then opens
     const h = k > 0.8 ? (1 - k) / 0.2 : k > 0.45 ? 1 : k / 0.45;
     this.curtains.forEach(c => c.setSize(this.view.w, h * this.view.h / 2));
+    this.shutter.clear();
+    const ch = h * this.view.h / 2, acc = hex(this.theme.palette.accent);
+    for (let yy = 0; yy < ch; yy += 14) { this.shutter.fillStyle(0x000000, 0.22).fillRect(0, yy, this.view.w, 3).fillStyle(0xffffff, 0.06).fillRect(0, yy + 3, this.view.w, 1); this.shutter.fillStyle(0x000000, 0.22).fillRect(0, this.view.h - yy - 3, this.view.w, 3); }
+    if (ch > 2) { this.shutter.fillStyle(acc, 0.9).fillRect(0, ch - 2, this.view.w, 2).fillRect(0, this.view.h - ch, this.view.w, 2); }
     const show = h > 0.5;
     this.banner.setText(show ? `${this.theme.labels.stage} ${this.stageIndex + 1}` : '').setAlpha(show ? 1 : 0);
-    this.bannerSub.setText(show ? (this.stageName || '') : '');
-    if (this.curtainT <= 0) { this.curtains.forEach(c => c.setSize(this.view.w, 0)); this.banner.setText(''); this.bannerSub.setText(''); }
+    this.bannerSub.setText(show ? (this.stageName || this.theme.labels.title || '') : '');
+    if (this.curtainT <= 0) { this.curtains.forEach(c => c.setSize(this.view.w, 0)); this.shutter.clear(); this.banner.setText(''); this.bannerSub.setText(''); }
   }
 
   onPhaseChange() {
@@ -303,7 +336,7 @@ class PlayScene extends Phaser.Scene {
         const ps = w.players;
         ENEMY_TYPES.forEach((type, i) => {
           const y = y0 + 40 + i * 24;
-          const icon = this.add.image(cx, y, this.sheets.units.key, `${type}_0`).setScale(0.6 / this.sheets.units.k).setAngle(90);
+          const icon = this.add.image(cx, y, this.sheets.units.key, `${type}_0`).setScale(20 / this.sheets.units.cell / this.sheets.units.k).setAngle(90);
           this.tally.add(icon);
           ps.forEach((p, pi) => {
             const side = ps.length === 1 ? -1 : pi === 0 ? -1 : 1;
