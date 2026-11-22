@@ -1,5 +1,5 @@
 import { APP_VERSION } from './version.js';
-import { VERSUS_TIMES } from './config.js';
+import { VERSUS_TIMES, BASE_WINS } from './config.js';
 import { computeLayout, viewSize } from './layout.js';
 import { loadTheme } from './assets.js';
 import { InputManager } from './input.js';
@@ -17,7 +17,7 @@ const stageEl = $('#stage'), controls = $('#controls'), pauseBtn = $('#pauseBtn'
 const DPAD_HTML = '<i class="arm u">▲</i><i class="arm d">▼</i><i class="arm l">◀</i><i class="arm r">▶</i><i class="hub"></i>';
 const THEME_IDS = ['classic', 'ancient', 'space', 'halloween'];
 const MODE_LABEL = { '1p': '1인 플레이', coop: '2인 협동', versus: '2인 대전', editor: '맵 편집' };
-const TOOL_NAMES = { brick: '벽돌', steel: '강철', water: '물', bush: '수풀', ice: '얼음', erase: '지우개', start: '1P/2P 시작 위치 (번갈아)', spawn: '적 등장 위치 (가장 오래된 곳 이동)' };
+const TOOL_NAMES = { brick: '벽돌', steel: '강철', water: '물', bush: '수풀', ice: '얼음', erase: '지우개', start: '1P/2P 시작 위치 (번갈아)', spawn: '적 등장 위치 (가장 오래된 곳 이동)', base: '본부 위치 (대전: 1P 본부, 2P 본부 순)' };
 const SCREENS = {
   title: { focus: '#title [data-mode]', back: null },
   setup: { focus: '#startBtn', back: () => show('title') },
@@ -33,7 +33,7 @@ const store = {
   save(v) { try { localStorage.setItem('tank.settings', JSON.stringify(v)); } catch { /* storage unavailable */ } }
 };
 // lives: 3..10, or 0 for ∞; hitMode: 'destroy' | 'damage'
-const settings = Object.assign({ mode: '1p', theme: 'classic', stage: 1, versusMap: 0, versusTime: 0, sound: true, customMap: null, lives: 3, hitMode: 'destroy' }, store.load());
+const settings = Object.assign({ mode: '1p', theme: 'classic', stage: 1, versusMap: 0, versusTime: 0, sound: true, customMap: null, lives: 3, hitMode: 'destroy', baseWins: 1 }, store.load());
 const LIVES_STEPS = [3, 4, 5, 6, 7, 8, 9, 10, 0];
 const mapStore = new MapStore();
 
@@ -129,9 +129,11 @@ function buildSetup() {
   $('#stagePrev').onclick = () => { settings.stage = (settings.stage + STAGES.length - 2) % STAGES.length + 1; settings.customMap = null; refreshSetup(); };
   $('#stageNext').onclick = () => { settings.stage = settings.stage % STAGES.length + 1; settings.customMap = null; refreshSetup(); };
   $('#customBtn').onclick = () => openPick('coop');
+  $('#customVersusBtn').onclick = () => openPick('versus');
   $('#mapPrev').onclick = () => { settings.versusMap = (settings.versusMap + VERSUS_MAPS.length - 1) % VERSUS_MAPS.length; settings.customMap = null; refreshSetup(); };
   $('#mapNext').onclick = () => { settings.versusMap = (settings.versusMap + 1) % VERSUS_MAPS.length; settings.customMap = null; refreshSetup(); };
   $('#timeBtn').onclick = () => { settings.versusTime = VERSUS_TIMES[(VERSUS_TIMES.indexOf(settings.versusTime) + 1) % VERSUS_TIMES.length]; refreshSetup(); };
+  $('#baseWinsBtn').onclick = () => { settings.baseWins = BASE_WINS[(BASE_WINS.indexOf(settings.baseWins) + 1) % BASE_WINS.length]; refreshSetup(); };
   $('#soundBtn').onclick = () => { settings.sound = !settings.sound; stage.setMuted(!settings.sound); refreshSetup(); };
   $('#livesBtn').onclick = () => { settings.lives = LIVES_STEPS[(LIVES_STEPS.indexOf(settings.lives) + 1) % LIVES_STEPS.length]; refreshSetup(); };
   $('#hitBtn').onclick = () => { settings.hitMode = settings.hitMode === 'damage' ? 'destroy' : 'damage'; refreshSetup(); };
@@ -148,8 +150,10 @@ function refreshSetup() {
   if (custom && custom.mode !== (versus ? 'versus' : 'coop')) settings.customMap = null;
   $('#stageNum').textContent = settings.customMap ? '—' : settings.stage;
   $('#customBtn').textContent = custom && !versus ? `내 맵: ${custom.name}` : '내 맵: 없음';
+  $('#customVersusBtn').textContent = custom && versus ? `내 맵: ${custom.name}` : '내 맵: 없음';
   $('#mapName').textContent = custom && versus ? custom.name : VERSUS_MAPS[settings.versusMap].name;
   $('#timeBtn').textContent = `제한 시간: ${settings.versusTime ? settings.versusTime / 60 + '분' : '없음'}`;
+  $('#baseWinsBtn').textContent = `본부 파괴: ${settings.baseWins}회`;
   $('#soundBtn').textContent = settings.sound ? '소리 켜짐' : '소리 꺼짐';
   $('#livesBtn').textContent = `목숨: ${settings.lives === 0 ? '∞' : settings.lives}`;
   $('#hitBtn').textContent = settings.hitMode === 'damage' ? '피격: 데미지' : '피격: 파괴';
@@ -251,10 +255,10 @@ function buildWorld() {
   const theme = themes[settings.theme];
   const versus = settings.mode === 'versus';
   let grid, wave = '', name = '';
-  if (customDef) { grid = Grid.parseHalf(customDef.tiles, Grid.parse(STAGES[0].map, 'coop').bases, customDef); if (customDef.mode === 'versus') grid = Grid.parseHalf(customDef.tiles, Grid.parse(VERSUS_MAPS[0].map, 'versus').bases, customDef); wave = versus ? '' : STAGES[Math.min(stageIndex, STAGES.length - 1)].wave; name = customDef.name; }
+  if (customDef) { const defBases = customDef.bases || Grid.parse(customDef.mode === 'versus' ? VERSUS_MAPS[0].map : STAGES[0].map, customDef.mode === 'versus' ? 'versus' : 'coop').bases; grid = Grid.parseHalf(customDef.tiles, defBases, customDef); wave = versus ? '' : STAGES[Math.min(stageIndex, STAGES.length - 1)].wave; name = customDef.name; }
   else if (versus) { const m = VERSUS_MAPS[settings.versusMap]; grid = parseStage(m, 'versus').grid; name = m.name; }
   else { const s = STAGES[stageIndex % STAGES.length]; ({ grid, wave } = parseStage(s, 'coop')); name = ''; }
-  world = new World({ mode: versus ? 'versus' : 'coop', grid, players: input.players, wave, rules: makeRules(theme.rules), traits: theme.traits || {}, timeLimit: versus ? settings.versusTime : 0, carry, lives: settings.lives === 0 ? Infinity : settings.lives, hitMode: settings.hitMode });
+  world = new World({ mode: versus ? 'versus' : 'coop', grid, players: input.players, wave, rules: makeRules(theme.rules), traits: theme.traits || {}, timeLimit: versus ? settings.versusTime : 0, carry, lives: settings.lives === 0 ? Infinity : settings.lives, hitMode: settings.hitMode, baseWins: settings.baseWins });
   return { world, theme, name };
 }
 
@@ -329,8 +333,8 @@ function openEditor(model, id, name) {
 
 function buildEditorBar() {
   const theme = themes[settings.theme];
-  const icon = t => t === 'erase' ? '✕' : t === 'start' ? frameImg(theme, 'units', theme.frames.units.p1[0], 32) : t === 'spawn' ? frameImg(theme, 'units', theme.frames.units.basic[0], 32) : frameImg(theme, 'tiles', theme.frames.tiles[t === 'water' ? 'water0' : t]);
-  $('#editorBar .tools').innerHTML = TOOLS.map(t => `<button data-tool="${t}" title="${TOOL_NAMES[t]}" class="${t === 'start' || t === 'spawn' ? 'marker' : ''}">${icon(t)}</button>`).join('');
+  const icon = t => t === 'erase' ? '✕' : t === 'start' ? frameImg(theme, 'units', theme.frames.units.p1[0], 32) : t === 'spawn' ? frameImg(theme, 'units', theme.frames.units.basic[0], 32) : t === 'base' ? frameImg(theme, 'base', theme.frames.base.alive, 32) : frameImg(theme, 'tiles', theme.frames.tiles[t === 'water' ? 'water0' : t]);
+  $('#editorBar .tools').innerHTML = TOOLS.map(t => `<button data-tool="${t}" title="${TOOL_NAMES[t]}" class="${t === 'start' || t === 'spawn' || t === 'base' ? 'marker' : ''}">${icon(t)}</button>`).join('');
   for (const b of $$('#editorBar .tools button')) b.onclick = () => { editor.tool = b.dataset.tool; refreshEditorBar(); };
   $('#brushBtn').onclick = () => { editor.toggleBrush(); refreshEditorBar(); };
   $('#saveMapBtn').onclick = saveMap;

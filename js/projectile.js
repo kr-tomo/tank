@@ -13,7 +13,7 @@ export const STAR_DEFAULT = {
 const RANGE = { arc: 8 };   // half cells
 // Will-o'-wisp: weaves along its lane, flies straight for `straight` tiles, then homes on the nearest hostile
 // inside a ±cone, turning at most `turn` deg/s, and fades after `range` tiles.
-export const WISP = { amp: 5, period: 32, straight: 4, cone: 45, turn: 150, range: 8 };
+export const WISP = { amp: 5, period: 32, straight: 2, cone: 45, turn: 150, range: 8 };
 // Laser: a bolt that crosses 4 tiles in 0.5 s, cancels against other lasers, and reflects off hull plating
 // (steel outside the fortress) up to `bounces` times, each reflection giving `legAfter` tiles of reach.
 export const BEAM = { speed: 768, range: 4, legAfter: 3, bounces: 2, width: 10 };
@@ -52,7 +52,7 @@ export function raycast(grid, units, from, dir, maxCells, opts = {}) {
       const unit = units.find(u => opts.target(u) && overlaps(probe, u));
       if (unit) return { kind: 'unit', unit, x, y, dist: k * U };
       if (opts.base) {
-        const bi = grid.bases.findIndex((b, i) => overlaps(probe, baseRect(b)) && (opts.base === true || opts.base(i)));
+        const bi = grid.bases.findIndex((b, i) => overlaps(probe, baseRect(b)) && (opts.base === true || opts.base(i)) && (opts.alive ? opts.alive(i) : true));
         if (bi >= 0) return { kind: 'base', base: bi, x, y, dist: k * U };
       }
     }
@@ -93,7 +93,7 @@ export function fire(unit, rules, world) {
     const range = (rules.range || RANGE.arc) + (fx.rangeBonus || 0);
     // first hostile unit (or, for enemies, the base) regardless of walls; fortress walls always stop it
     // the base of another team is a target (coop: enemies only; versus: the other player's)
-    const hostileBase = i => (world.bases?.[i]?.team ?? 0) !== unit.team;
+    const hostileBase = i => (world.bases?.[i]?.team ?? 0) !== unit.team && (world.bases?.[i]?.alive ?? true);
     let hit = raycast(world.grid, world.units, f, unit.dir, range, { ignoreWalls: true, fortressWalls: true, target, base: hostileBase });
     if (hit.kind === 'range' || hit.kind === 'edge') hit = raycast(world.grid, world.units, f, unit.dir, range, {});
     const [dx, dy] = DIRS[unit.dir];
@@ -151,7 +151,7 @@ function hitSomething(p, world) {
     p.alive = false;
     return [{ type: 'hitWall', x: p.x, y: p.y, cells: wallStrip(p, grid, walls), steel: p.steel, shot: p }];
   }
-  const bi = grid.bases.findIndex(b => overlaps(p, baseRect(b)));
+  const bi = grid.bases.findIndex((b, i) => overlaps(p, baseRect(b)) && (world.bases?.[i]?.alive ?? true));
   if (bi >= 0) { p.alive = false; return [{ type: 'hitBase', base: bi, x: p.x, y: p.y, shot: p }]; }
   // enemy shots pass other enemies (as in the original); players are hit by anything
   const unit = units.find(u => u !== p.owner && !u.dead && overlaps(p, u) && !(u.spawnT > 0) && !u.phased && (u.team !== p.team || u.player !== undefined));
@@ -226,7 +226,7 @@ function stepArc(p, dt, world) {
   const rect = { x: p.toX + (s - 2) * U / 2, y: p.toY + (s - 2) * U / 2, w: size, h: size };
   const ev = [{ type: 'land', x: p.toX, y: p.toY, t: p.t, cells, steel: p.steel, shot: p, splash: s }];
   for (const u of world.units) if (u !== p.owner && !u.dead && !(u.spawnT > 0) && !u.phased && overlaps(rect, u)) ev.push({ type: u.team === p.team ? 'hitFriend' : 'hitUnit', unit: u, x: p.toX, y: p.toY, shot: p });
-  world.grid.bases.forEach((b, i) => { if (overlaps(rect, baseRect(b))) ev.push({ type: 'hitBase', base: i, x: p.toX, y: p.toY, shot: p }); });
+  world.grid.bases.forEach((b, i) => { if ((world.bases?.[i]?.alive ?? true) && overlaps(rect, baseRect(b))) ev.push({ type: 'hitBase', base: i, x: p.toX, y: p.toY, shot: p }); });
   return ev;
 }
 
@@ -296,7 +296,7 @@ function stepBeam(p, dt, world) {
       }
     }
     // the base and units: at the head and anywhere along the trail
-    const bi = grid.bases.findIndex(b => overlaps(head, baseRect(b)) || beamSegments(p).some(([a, c]) => overlaps(segRect(a, c, p.w), baseRect(b))));
+    const bi = grid.bases.findIndex((b, i) => (world.bases?.[i]?.alive ?? true) && (overlaps(head, baseRect(b)) || beamSegments(p).some(([a, c]) => overlaps(segRect(a, c, p.w), baseRect(b)))));
     if (bi >= 0) { p.alive = false; ev.push({ type: 'hitBase', base: bi, x: p.x, y: p.y, shot: p }); return ev; }
     const rects = [head, ...beamSegments(p).map(([a, c]) => segRect(a, c, p.w))];
     for (const u of units) {

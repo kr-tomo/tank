@@ -260,7 +260,7 @@ class PlayScene extends Phaser.Scene {
       const gx = icon.x - 8, gy = icon.y + 11, gw = 44;
       this.gauges.fillStyle(0x000000, 0.45).fillRoundedRect(gx, gy, gw, 4, 2).fillStyle(col, 0.95).fillRoundedRect(gx, gy, gw * frac, 4, 2);
     });
-    if (w.mode === 'versus') this.hudTime.setText(w.timeLeft > 0 ? `${Math.floor(w.timeLeft / 60)}:${String(Math.ceil(w.timeLeft % 60)).padStart(2, '0')}` : '∞');
+    if (w.mode === 'versus') this.hudTime.setText((w.timeLeft > 0 ? `${Math.floor(w.timeLeft / 60)}:${String(Math.ceil(w.timeLeft % 60)).padStart(2, '0')}` : '∞') + (w.baseWins > 1 ? `\n본부 ${w.baseKills[0]}·${w.baseKills[1]} / ${w.baseWins}` : ''));
     else this.hudTime.setText('');
   }
 
@@ -403,7 +403,7 @@ class PlayScene extends Phaser.Scene {
       let tint = 0xffffff, alpha = 1;
       if (u.role === 'armor') tint = [0xff8a8a, 0xffd27a, 0xd8ffd0, 0xffffff][clamp(u.hp - 1, 0, 3)];
       if (u.flash && Math.floor(this.t * 6) % 2) tint = 0xff6a6a;
-      if (u.enemy && w.frozenT > 0) tint = 0x8fa0b8;
+      if ((u.enemy && w.frozenT > 0) || u.frozen) tint = 0x8fa0b8;
       if (u.stunT > 0) tint = 0x9a9aa8;
       if (u.phased) alpha = 0.35;
       spr.setTint(tint).setAlpha(alpha);
@@ -534,6 +534,9 @@ class PlayScene extends Phaser.Scene {
           this.sfx(big ? th.sfx.explodeBig : th.sfx.explode, { volume: big ? 0.7 : 0.5, rate: rnd(0.92, 1.08) });
           break;
         }
+        case 'baseUp': this.ring(e.x, e.y, hex(th.palette.accent), 1.6); this.flashStar(e.x, e.y, 1.2, ex[0]); this.sfx('shovel', { volume: 0.5 }); break;
+        case 'rebuild': this.gridDirty = true; for (const [cx, cy] of e.cells) this.fx.chips.explode(2, cx * 16 + 8, cy * 16 + 8); cam.shake(120, 0.004); break;
+        case 'relocate': if (e.unit.player !== undefined) this.popText('밀려남', e.unit.x, e.unit.y - 22, '#fff', 12); break;
         case 'baseHit': {
           cam.flash(260, 255, 230, 180); cam.shake(700, 0.02);
           this.fx.spark.explode(60, e.x, e.y); this.fx.smoke.explode(30, e.x, e.y);

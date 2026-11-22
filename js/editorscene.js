@@ -50,7 +50,7 @@ export class EditorScene extends Phaser.Scene {
       const img = this.add.image(cx * U, cy * U, sh.tiles.key, 'brick_00').setOrigin(0).setScale(1 / sh.tiles.k).setVisible(false);
       layer.add(img); this.tiles.push(img);
     }
-    for (const b of grid.bases) layer.add(this.add.image(b.cx * U + U, b.cy * U + U, sh.base.key, 'alive').setScale(1 / sh.base.k));
+    this.baseImgs = grid.bases.map(() => { const im = this.add.image(0, 0, sh.base.key, 'alive').setScale(1 / sh.base.k); layer.add(im); return im; });
     // markers: enemy spawns and player starts (faded unit sprites) over a hatch on the protected cells
     this.markerGfx = this.add.graphics(); layer.add(this.markerGfx);
     this.markers = [...this.model.spawns.map(() => this.add.image(0, 0, sh.units.key, 'basic_0').setScale(32 / sh.units.cell / sh.units.k).setAlpha(0.4).setAngle(180)),
@@ -76,6 +76,7 @@ export class EditorScene extends Phaser.Scene {
   refreshMarkers() {
     const m = this.model, pts = [...m.spawns, ...m.starts];
     pts.forEach(([tx, ty], i) => { this.markers[i].setPosition(tx * TILE + TILE / 2, ty * TILE + TILE / 2); this.markerLabels[i].setPosition(tx * TILE + TILE / 2, ty * TILE + TILE - 10); });
+    m.grid.bases.forEach((b, i) => this.baseImgs[i]?.setPosition(b.cx * U + U, b.cy * U + U));
     this.markerGfx.clear().fillStyle(0xff5a5a, 0.12);
     for (const key of m.protected) { const [cx, cy] = key.split(',').map(Number); this.markerGfx.fillRect(cx * U, cy * U, U, U); }
     this.markVersion = m.markVersion;
@@ -119,12 +120,12 @@ export class EditorScene extends Phaser.Scene {
     const x0 = Math.min(...cells.map(c => c[0])) * U, y0 = Math.min(...cells.map(c => c[1])) * U, s = m.brush === 'tile' ? TILE : U;
     const pulse = 0.6 + 0.4 * Math.sin(this.t * 8);
     this.cursor.clear().lineStyle(2, 0xffffff, pulse).strokeRect(x0 + 1, y0 + 1, s - 2, s - 2).lineStyle(1, 0x000000, 0.6).strokeRect(x0, y0, s, s);
-    const names = { brick: '벽돌', steel: '강철', water: '물', bush: '수풀', ice: '얼음', erase: '지우개', start: '시작 위치', spawn: '적 등장' };
-    const marker = m.tool === 'start' || m.tool === 'spawn';
+    const names = { brick: '벽돌', steel: '강철', water: '물', bush: '수풀', ice: '얼음', erase: '지우개', start: '시작 위치', spawn: '적 등장', base: '본부 위치' };
+    const marker = m.tool === 'start' || m.tool === 'spawn' || m.tool === 'base';
     this.toolIcon.setVisible(!marker);
     if (!marker) this.toolIcon.setFrame(m.tool === 'erase' ? 'ice' : m.tool === 'water' ? 'water0' : m.tool).setAlpha(m.tool === 'erase' ? 0.3 : 1);
     this.toolText.setText(names[m.tool]);
-    this.brushText.setText(marker ? (m.tool === 'start' ? `다음: ${m.startNext + 1}P` : '가장 오래된 곳 이동') : (m.brush === 'tile' ? '큰 붓' : '작은 붓'));
+    this.brushText.setText(marker ? (m.tool === 'start' ? `다음: ${m.startNext + 1}P` : m.tool === 'base' ? (m.grid.bases.length > 1 ? `다음: ${m.baseNext + 1}P 본부` : '본부 이동') : '가장 오래된 곳 이동') : (m.brush === 'tile' ? '큰 붓' : '작은 붓'));
   }
 
   erase() { const t = this.model.tool; this.model.tool = 'erase'; this.model.paint(); this.model.tool = t; }

@@ -40,7 +40,7 @@ function incomingShot(e, world) {
 
 function pickDir(e, world) {
   const w = { up: 1, down: 1, left: 1, right: 1 };
-  const base = world.bases.find(b => b.alive && b.team !== e.team);
+  const base = e.team === 2 ? null : world.bases.find(b => b.alive && b.team !== e.team);
   if (base) {
     const bx = base.cx * U + U, by = base.cy * U + U;
     if (Math.abs(bx - e.x) > U) w[bx > e.x ? 'right' : 'left'] += 3;
@@ -76,7 +76,7 @@ export function decide(e, world, dt) {
   let dir = e.dir;
   if (ai.turnT <= 0 || e.blocked) { ai.turnT = 1 + world.rand() * 2; dir = pickDir(e, world); }
   let shoot = false;
-  const hit = raycast(world.grid, world.units, front(e), dir, SIGHT, { target: u => u.team !== e.team && !u.dead && u.player !== undefined, base: true });
+  const hit = raycast(world.grid, world.units, front(e), dir, SIGHT, { target: u => u.team !== e.team && !u.dead && u.player !== undefined, base: e.team !== 2, alive: i => world.bases?.[i]?.alive ?? true });
   if (hit.kind === 'unit' || hit.kind === 'base') shoot = ai.sure || world.rand() < (hit.kind === 'base' ? BASE_REACTION : REACTION) * dt;
   else { ai.fireT -= dt; if (ai.fireT <= 0) { shoot = true; ai.fireT = 2.5 * (0.5 + world.rand()); } }
   return { dir, fire: shoot };

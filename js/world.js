@@ -1,7 +1,7 @@
 // The whole match state and its fixed-step tick. Pure: no DOM, no Phaser. The renderer reads the
 // state and the per-tick `events` list; theme rules (projectile kind, enemy traits) are injected.
 import { U, TILE, UNIT, MODES, SPEED, ENEMY_HP, SCORE, ITEM_IDS, ITEM_TIME, LIVES, MAX_LEVEL, MAX_ENEMIES, SPAWN_INTERVAL,
-  SPAWN_TIME, RESPAWN_TIME, RESPAWN_SHIELD, FLASH_INDEX, STUN_TIME, CLEAR_DELAY, ICE_SLIDE, MUD_SPEED, VERSUS_ITEM_INTERVAL } from './config.js';
+  SPAWN_TIME, RESPAWN_TIME, RESPAWN_SHIELD, FLASH_INDEX, STUN_TIME, CLEAR_DELAY, ICE_SLIDE, MUD_SPEED, VERSUS_ITEM_INTERVAL, BASE_RESPAWN, VERSUS_MAX_ENEMIES, VERSUS_WAVE, VERSUS_CLOCK } from './config.js';
 import { makeUnit, tryMove, overlaps, unitCells, freeAt } from './units.js';
 import { fire, stepProjectile, makeRules } from './projectile.js';
 import { decide } from './enemy.js';
@@ -27,17 +27,20 @@ export function rng(seed = Date.now() % 2147483647) {
 export class World {
   // { mode, grid, players, wave:'bbff…', rules, traits, timeLimit, seed, stage }
   // lives: 3..10 or Infinity; hitMode: 'destroy' (a hit blows the tank up, the next one rolls in) | 'damage' (a hit costs a life, the tank stays)
-  constructor({ mode = 'coop', grid, players = 1, wave = '', rules = makeRules(), traits = {}, timeLimit = 0, seed, stage = 1, carry = null, lives = LIVES, hitMode = 'destroy' }) {
+  constructor({ mode = 'coop', grid, players = 1, wave = '', rules = makeRules(), traits = {}, timeLimit = 0, seed, stage = 1, carry = null, lives = LIVES, hitMode = 'destroy', baseWins = 1 }) {
     Object.assign(this, { mode, grid, rules, traits, stage, hitMode, time: 0, phase: 'play', phaseT: 0, winner: null, events: [] });
     this.rand = rng(seed);
     this.starts = grid.starts || MODES[mode].starts;
     this.spawns = grid.spawns || MODES[mode].spawns;
     this.units = []; this.shots = []; this.items = [];
-    this.wave = [...wave].map(c => TYPE_OF[c] || 'basic');
-    this.enemiesLeft = this.wave.length; this.spawnIndex = 0; this.spawnT = 0; this.spawnSlot = 0;
-    this.frozenT = 0; this.shovelT = 0; this.itemT = VERSUS_ITEM_INTERVAL;
+    // versus: neutral enemies (team 2) keep coming for the whole match; they hunt both players but can't hurt bases
+    this.wave = [...(mode === 'versus' ? VERSUS_WAVE : wave)].map(c => TYPE_OF[c] || 'basic');
+    this.enemiesLeft = mode === 'versus' ? Infinity : this.wave.length; this.spawnIndex = 0; this.spawnT = 0; this.spawnSlot = 0;
+    this.frozenT = 0; this.shovelT = grid.bases.map(() => 0); this.itemT = VERSUS_ITEM_INTERVAL;   // shovel timer per base
     this.timeLeft = timeLimit || 0;
-    this.bases = grid.bases.map((b, i) => ({ cx: b.cx, cy: b.cy, team: mode === 'versus' ? i : 0, alive: true }));
+    this.bases = grid.bases.map((b, i) => ({ cx: b.cx, cy: b.cy, team: mode === 'versus' ? i : 0, alive: true, respawnT: 0 }));
+    this.baseWins = baseWins; this.baseKills = [0, 0];   // versus: bases destroyed by each team
+    this.initialCells = grid.cells.slice();               // the map as loaded: a rebuilt base restores its surroundings from this
     this.players = Array.from({ length: players }, (_, i) => ({ index: i, unit: null, lives: carry?.[i]?.lives ?? lives, score: carry?.[i]?.score ?? 0, level: carry?.[i]?.level ?? 0, kills: { basic: 0, fast: 0, power: 0, armor: 0 }, respawnT: 0, fireT: 0 }));
     this.players.forEach(p => { if (p.lives > 0) { this.spawnPlayer(p.index, true); p.unit.level = p.level; } });
   }
@@ -69,15 +72,17 @@ export class World {
   }
 
   trySpawnWave() {
-    if (this.enemiesLeft <= 0 || this.units.filter(u => u.enemy).length >= MAX_ENEMIES) return;
+    const cap = this.mode === 'versus' ? VERSUS_MAX_ENEMIES : MAX_ENEMIES;
+    if (this.enemiesLeft <= 0 || this.units.filter(u => u.enemy).length >= cap) return;
     if (this.spawnT > 0) return;
     const spawns = this.spawns;
     for (let k = 0; k < spawns.length; k++) {
       const slot = (this.spawnSlot + k) % spawns.length, at = tileCenter(spawns[slot]);
       const probe = { ...at, w: UNIT, h: UNIT };
       if (this.units.some(u => overlaps(probe, u))) continue;
-      const type = this.wave[this.spawnIndex];
-      this.spawnEnemy(type, { ...at, dir: 'down', flash: FLASH_INDEX.includes(this.spawnIndex) });
+      const type = this.wave[this.spawnIndex % this.wave.length];
+      const flash = this.mode === 'versus' ? this.spawnIndex % 7 === 3 : FLASH_INDEX.includes(this.spawnIndex);
+      this.spawnEnemy(type, { ...at, dir: at.y > this.grid.height / 2 ? 'up' : 'down', flash });
       this.spawnIndex++; this.enemiesLeft--; this.spawnSlot = (slot + 1) % spawns.length; this.spawnT = SPAWN_INTERVAL;
       return;
     }
@@ -100,7 +105,9 @@ export class World {
   dropItem(region) {
     const at = this.freeTile(region);
     if (!at) return null;
-    const item = { id: ITEM_IDS[Math.floor(this.rand() * ITEM_IDS.length)], x: at.x, y: at.y, w: UNIT, h: UNIT, t: ITEM_TIME.item };
+    // the life item is pointless with infinite lives
+    const ids = this.players.every(p => p.lives === Infinity) ? ITEM_IDS.filter(i => i !== 'tank') : ITEM_IDS;
+    const item = { id: ids[Math.floor(this.rand() * ids.length)], x: at.x, y: at.y, w: UNIT, h: UNIT, t: ITEM_TIME.item };
     this.items.push(item);
     this.emit('item', { item });
     return item;
@@ -111,12 +118,20 @@ export class World {
     this.emit('pickup', { id, player: playerIndex });
     switch (id) {
       case 'grenade':
-        if (this.mode === 'versus') { const o = this.players[1 - playerIndex]; if (o?.unit) this.killPlayer(o.index); }
-        else for (const e of this.units.filter(x => x.enemy)) this.destroyEnemy(e, null);
+        for (const e of this.units.filter(x => x.enemy)) this.destroyEnemy(e, null);   // versus: the opponent is untouched
         break;
       case 'helmet': if (u) u.shieldT = ITEM_TIME.helmet; break;
-      case 'clock': this.frozenT = ITEM_TIME.clock; this.emit('freeze'); break;
-      case 'shovel': this.shovelT = ITEM_TIME.shovel; this.grid.buildFortress(true); this.emit('shovel', { steel: true }); break;
+      case 'clock':   // versus: the opponent is frozen as well
+        const clock = this.mode === 'versus' ? VERSUS_CLOCK : ITEM_TIME.clock;
+        this.frozenT = clock;
+        if (this.mode === 'versus') for (const o of this.players) if (o.index !== playerIndex) o.frozenT = clock;
+        this.emit('freeze');
+        break;
+      case 'shovel': {   // versus: only the picker's own base is fortified
+        const bi = this.mode === 'versus' ? Math.min(playerIndex, this.bases.length - 1) : 0;
+        this.shovelT[bi] = ITEM_TIME.shovel; this.grid.buildFortress(true, bi); this.emit('shovel', { steel: true, base: bi });
+        break;
+      }
       case 'star': if (u) u.level = Math.min(MAX_LEVEL, (u.level || 0) + 1); break;
       case 'tank': p.lives++; break;
     }
@@ -150,8 +165,12 @@ export class World {
     if (!b.alive) return;
     b.alive = false;
     this.emit('baseHit', { base: i, x: b.cx * U + U, y: b.cy * U + U });
-    if (this.mode === 'versus') this.finish(1 - b.team);
-    else this.finish('over');
+    if (this.mode !== 'versus') { this.finish('over'); return; }
+    // versus: count the kill for the other team; the base rebuilds unless that was the deciding one
+    const killer = 1 - b.team;
+    this.baseKills[killer]++;
+    if (this.baseKills[killer] >= this.baseWins) this.finish(killer);
+    else b.respawnT = BASE_RESPAWN;
   }
 
   finish(result) {
@@ -179,7 +198,7 @@ export class World {
           this.emit(ev.type === 'land' ? 'land' : 'hitWall', ev);
           break;
         case 'hitUnit': case 'hitFriend': this.damage(ev.unit, ev.shot, ev); break;
-        case 'hitBase': this.destroyBase(ev.base); break;
+        case 'hitBase': if (!ev.shot?.owner?.enemy || this.mode !== 'versus') this.destroyBase(ev.base); break;   // neutral enemies can't hurt bases
         case 'cancel': this.emit('cancel', ev); break;
         default: this.emit(ev.type, ev);
       }
@@ -258,6 +277,8 @@ export class World {
     const u = p.unit;
     if (u.shieldT > 0) u.shieldT -= dt;
     if (u.stunT > 0) { u.stunT -= dt; return; }
+    if (p.frozenT > 0) { p.frozenT -= dt; u.frozen = p.frozenT > 0; return; }   // frozen by the opponent's clock
+    u.frozen = false;
     const dir = inp.up ? 'up' : inp.down ? 'down' : inp.left ? 'left' : inp.right ? 'right' : null;
     this.moveUnit(u, dir, dt);
     p.fireT -= dt;
@@ -302,9 +323,22 @@ export class World {
     return unitCells({ x: dx ? x : u.x, y: dy ? y : u.y, w: dx ? 1 : UNIT, h: dy ? 1 : UNIT });
   }
 
+  // A rebuilt base brings the 8 tiles around it back to the map's initial terrain; any unit standing
+  // on a cell that became solid is pushed to the nearest free spot.
+  rebuildAround(b) {
+    const cells = [];
+    for (let cy = b.cy - 2; cy <= b.cy + 3; cy++) for (let cx = b.cx - 2; cx <= b.cx + 3; cx++) {
+      if (!this.grid.inside(cx, cy) || this.grid.isBase(cx, cy)) continue;
+      const i = cy * this.grid.cols + cx;
+      if (this.grid.cells[i] !== this.initialCells[i]) { this.grid.cells[i] = this.initialCells[i]; cells.push([cx, cy]); }
+    }
+    this.emit('rebuild', { base: this.bases.indexOf(b), cells, x: b.cx * U + U, y: b.cy * U + U });
+    for (const u of [...this.units]) if (unitCells(u).some(([cx, cy]) => this.grid.blocksUnit(cx, cy))) this.unstick(u, false);
+  }
+
   // A ghost that turns solid inside terrain (or on another unit) moves to the nearest free lane spot;
   // with nothing free within RELOCATE_RADIUS it is removed so the wave can go on.
-  unstick(e) {
+  unstick(e, removeIfStuck = true) {
     const others = this.units.filter(u => u !== e);
     if (freeAt(e, e.x, e.y, this.grid, others)) return;
     const sx = Math.round(e.x / U) * U, sy = Math.round(e.y / U) * U, R = RELOCATE_RADIUS * UNIT;
@@ -315,7 +349,7 @@ export class World {
       if (freeAt(e, x, y, this.grid, others)) { best = [x, y]; bd = d; }
     }
     if (best) { e.x = best[0]; e.y = best[1]; this.emit('relocate', { unit: e }); }
-    else { this.emit('guard', { unit: e }); this.destroyEnemy(e, null); }
+    else if (removeIfStuck && e.enemy) { this.emit('guard', { unit: e }); this.destroyEnemy(e, null); }
   }
 
   /* ---------- the tick ---------- */
@@ -324,10 +358,11 @@ export class World {
     if (this.phase !== 'play') { this.phaseT += dt; return; }
     this.time += dt;
     if (this.frozenT > 0) this.frozenT -= dt;
-    if (this.shovelT > 0) { this.shovelT -= dt; if (this.shovelT <= 0) { this.grid.buildFortress(false); this.emit('shovel', { steel: false }); } }
+    this.shovelT.forEach((t, bi) => { if (t > 0) { this.shovelT[bi] = t - dt; if (this.shovelT[bi] <= 0) { this.grid.buildFortress(false, bi); this.emit('shovel', { steel: false, base: bi }); } } });
     if (this.spawnT > 0) this.spawnT -= dt;
     this.trySpawnWave();
     if (this.mode === 'versus') {
+      for (const b of this.bases) if (!b.alive && b.respawnT > 0) { b.respawnT -= dt; if (b.respawnT <= 0) { b.alive = true; this.rebuildAround(b); this.emit('baseUp', { base: this.bases.indexOf(b), x: b.cx * U + U, y: b.cy * U + U }); } }
       this.itemT -= dt;
       if (this.itemT <= 0) { this.itemT = VERSUS_ITEM_INTERVAL; const [tw] = MODES.versus.tiles; this.dropItem({ x0: Math.floor(tw / 3), x1: Math.ceil(tw * 2 / 3) - 1 }); }
       if (this.timeLeft > 0) { this.timeLeft -= dt; if (this.timeLeft <= 0) { this.timeLeft = 0; this.finish(null); return; } }
@@ -341,7 +376,7 @@ export class World {
     if (this.phase !== 'play') return;
     // end conditions
     if (this.mode === 'coop') {
-      if (this.wave.length && this.enemiesLeft <= 0) {
+      if (this.mode === 'coop' && this.wave.length && this.enemiesLeft <= 0) {
         // guard: leftover enemies that are stuck (or linger far too long) are blown up so the stage can end
         this.lingerT = (this.lingerT || 0) + dt;
         const left = this.units.filter(u => u.enemy);

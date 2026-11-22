@@ -3,7 +3,7 @@ import { Grid } from './grid.js';
 import { MODES, UNIT, TILE } from './config.js';
 import { cellsAt } from './units.js';
 
-export const TOOLS = ['brick', 'steel', 'water', 'bush', 'ice', 'erase', 'start', 'spawn'];
+export const TOOLS = ['brick', 'steel', 'water', 'bush', 'ice', 'erase', 'start', 'spawn', 'base'];
 export const MAX_MAPS = 50;
 export const STORE_KEY = 'tank.maps.v1';
 
@@ -28,7 +28,7 @@ export class EditorModel {
     // the 'spawn' tool replaces the oldest of the three
     this.starts = (this.grid.starts || m.starts).map(t => [...t]);
     this.spawns = (this.grid.spawns || m.spawns).map(t => [...t]);
-    this.startNext = 0; this.spawnOrder = this.spawns.map((_, i) => i);
+    this.startNext = 0; this.spawnOrder = this.spawns.map((_, i) => i); this.baseNext = 0;
     this.markVersion = 0;
   }
 
@@ -48,6 +48,7 @@ export class EditorModel {
     const taken = [...this.starts, ...this.spawns].some(([x, y]) => x === tx && y === ty);
     if (taken) return false;
     if (this.tool === 'start') { this.starts[this.startNext] = [tx, ty]; this.startNext ^= 1; }
+    else if (this.tool === 'base') { const i = this.baseNext % this.grid.bases.length; this.grid.bases[i] = { cx: tx * 2, cy: ty * 2 }; this.baseNext = (i + 1) % this.grid.bases.length; }
     else { const i = this.spawnOrder.shift(); this.spawns[i] = [tx, ty]; this.spawnOrder.push(i); }
     for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) this.grid.set(tx * 2 + dx, ty * 2 + dy, null);
     this.markVersion++; this.version = (this.version || 0) + 1;
@@ -55,7 +56,7 @@ export class EditorModel {
   }
 
   static fromDef(def) {
-    const bases = Grid.parse(emptyMap(def.mode), def.mode).bases;
+    const bases = def.bases || Grid.parse(emptyMap(def.mode), def.mode).bases;
     return new EditorModel(def.mode, Grid.parseHalf(def.tiles, bases, def));
   }
 
@@ -67,7 +68,7 @@ export class EditorModel {
   }
 
   paint(cx = this.cursor.cx, cy = this.cursor.cy) {
-    if (this.tool === 'start' || this.tool === 'spawn') return this.placeMarker(cx, cy);
+    if (this.tool === 'start' || this.tool === 'spawn' || this.tool === 'base') return this.placeMarker(cx, cy);
     let changed = false;
     const prot = this.protected;
     for (const [x, y] of this.cellsUnderBrush(cx, cy)) {
@@ -89,7 +90,7 @@ export class EditorModel {
   nextTool() { this.tool = TOOLS[(TOOLS.indexOf(this.tool) + 1) % TOOLS.length]; }
   toggleBrush() { this.brush = this.brush === 'tile' ? 'half' : 'tile'; }
 
-  toDef(name = '') { return { mode: this.mode, name, tiles: this.grid.serialize(), starts: this.starts.map(t => [...t]), spawns: this.spawns.map(t => [...t]) }; }
+  toDef(name = '') { return { mode: this.mode, name, tiles: this.grid.serialize(), starts: this.starts.map(t => [...t]), spawns: this.spawns.map(t => [...t]), bases: this.grid.bases.map(b => ({ ...b })) }; }
 }
 
 export class MapStore {

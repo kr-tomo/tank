@@ -66,10 +66,11 @@ export class Grid {
     return this.bases.some(b => cx >= b.cx - r && cx <= b.cx + 1 + r && cy >= b.cy - r && cy <= b.cy + 1 + r);
   }
 
-  // fill the one-tile ring around each base with steel (shovel) or brick (shovel expired)
-  buildFortress(steel) {
+  // fill the one-tile ring around each base (or only base `only`) with steel (shovel) or brick (shovel expired)
+  buildFortress(steel, only = null) {
     const r = FORTRESS_TILES * 2;
     for (const b of this.bases) {
+      if (only !== null && this.bases.indexOf(b) !== only) continue;
       for (let cy = b.cy - r; cy <= b.cy + 1 + r; cy++) for (let cx = b.cx - r; cx <= b.cx + 1 + r; cx++) {
         if (!this.inside(cx, cy) || this.isBase(cx, cy)) continue;
         this.set(cx, cy, steel ? 'steel' : 'brick');
