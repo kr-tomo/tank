@@ -32,11 +32,14 @@ export class Grid {
   }
 
   // half-cell text as written by serialize(); bases are passed separately
-  static parseHalf(text, bases = []) {
+  // extras: { starts: [[tx,ty],[tx,ty]], spawns: [[tx,ty]×3] } (tile coords) override the mode defaults
+  static parseHalf(text, bases = [], extras = {}) {
     const lines = text.trim().split('\n');
     const g = new Grid(lines[0].length, lines.length);
     lines.forEach((line, y) => { for (let x = 0; x < g.cols; x++) g.cells[y * g.cols + x] = CHARS[line[x]] ?? 0; });
     g.bases = bases.map(b => ({ ...b }));
+    if (extras.starts) g.starts = extras.starts.map(t => [...t]);
+    if (extras.spawns) g.spawns = extras.spawns.map(t => [...t]);
     return g;
   }
 

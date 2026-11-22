@@ -12,6 +12,9 @@ const FIRE_REPEAT = 0.15;
 const PHASE_PERIOD = 2;
 const CRUSH_TIME = 0.5;
 const HIT_GRACE = 1;        // damage mode: seconds of invulnerability after a hit
+const FRIENDLY_STREAK = 3;  // friendly hits in one stun that destroy the tank
+const STUCK_TIME = 8;       // a last enemy that has not moved this long is removed so the stage can end
+const LINGER_TIME = 60;     // …or any leftover enemies this long after the wave ran out
 const tileCenter = ([tx, ty]) => ({ x: tx * TILE + TILE / 2, y: ty * TILE + TILE / 2 });
 
 // mulberry32
@@ -26,6 +29,8 @@ export class World {
   constructor({ mode = 'coop', grid, players = 1, wave = '', rules = makeRules(), traits = {}, timeLimit = 0, seed, stage = 1, carry = null, lives = LIVES, hitMode = 'destroy' }) {
     Object.assign(this, { mode, grid, rules, traits, stage, hitMode, time: 0, phase: 'play', phaseT: 0, winner: null, events: [] });
     this.rand = rng(seed);
+    this.starts = grid.starts || MODES[mode].starts;
+    this.spawns = grid.spawns || MODES[mode].spawns;
     this.units = []; this.shots = []; this.items = [];
     this.wave = [...wave].map(c => TYPE_OF[c] || 'basic');
     this.enemiesLeft = this.wave.length; this.spawnIndex = 0; this.spawnT = 0; this.spawnSlot = 0;
@@ -43,7 +48,7 @@ export class World {
 
   /* ---------- spawning ---------- */
   spawnPlayer(i, first = false) {
-    const p = this.players[i], start = tileCenter(MODES[this.mode].starts[i]);
+    const p = this.players[i], start = tileCenter(this.starts[i]);
     const u = makeUnit({ role: i === 0 ? 'p1' : 'p2', player: i, team: this.mode === 'versus' ? i : 0, x: start.x, y: start.y, dir: 'up',
       level: 0, shieldT: RESPAWN_SHIELD, stunT: 0, spawnT: first ? 0 : 0, slideT: 0 });
     p.unit = u;
@@ -65,7 +70,7 @@ export class World {
   trySpawnWave() {
     if (this.enemiesLeft <= 0 || this.units.filter(u => u.enemy).length >= MAX_ENEMIES) return;
     if (this.spawnT > 0) return;
-    const spawns = MODES[this.mode].spawns;
+    const spawns = this.spawns;
     for (let k = 0; k < spawns.length; k++) {
       const slot = (this.spawnSlot + k) % spawns.length, at = tileCenter(spawns[slot]);
       const probe = { ...at, w: UNIT, h: UNIT };
@@ -190,8 +195,15 @@ export class World {
       return;
     }
     if (u.shieldT > 0) { this.emit('ricochet', { unit: u, x: ev.x, y: ev.y }); return; }
-    if (shot.team === u.team) { u.stunT = STUN_TIME; this.emit('stun', { unit: u }); return; }
     const p = this.players[u.player];
+    if (shot.team === u.team) {
+      // a streak of friendly hits before the stun wears off: the third one counts as a real hit
+      u.stunHits = u.stunT > 0 ? (u.stunHits || 0) + 1 : 1;
+      u.stunT = STUN_TIME;
+      this.emit('stun', { unit: u, streak: u.stunHits });
+      if (u.stunHits < FRIENDLY_STREAK) return;
+      u.stunHits = 0; u.stunT = 0;
+    }
     if (this.hitMode === 'damage' && (p.lives === Infinity || p.lives > 1)) {
       if (p.lives !== Infinity) p.lives--;
       u.shieldT = HIT_GRACE;
@@ -237,7 +249,7 @@ export class World {
       if (p.lives <= 0) return;
       p.respawnT -= dt;
       if (p.respawnT <= 0) {
-        const start = tileCenter(MODES[this.mode].starts[p.index]), probe = { ...start, w: UNIT, h: UNIT };
+        const start = tileCenter(this.starts[p.index]), probe = { ...start, w: UNIT, h: UNIT };
         if (!this.units.some(u => overlaps(probe, u))) { this.spawnPlayer(p.index); this.emit('respawn', { player: p.index }); }
       }
       return;
@@ -264,7 +276,9 @@ export class World {
       if (!e.phased) this.unstick(e);
     }
     const d = decide(e, this, dt);
+    const px = e.x, py = e.y;
     const r = this.moveUnit(e, d.dir, dt);
+    e.idleT = Math.abs(e.x - px) + Math.abs(e.y - py) > 0.01 ? 0 : (e.idleT || 0) + dt;
     // siege towers crush the brick they push against (outside the fortress)
     if (this.traits[e.role] === 'crush') {
       if (r?.blocked) {
@@ -317,6 +331,12 @@ export class World {
     if (this.phase !== 'play') return;
     // end conditions
     if (this.mode === 'coop') {
+      if (this.wave.length && this.enemiesLeft <= 0) {
+        // guard: leftover enemies that are stuck (or linger far too long) are blown up so the stage can end
+        this.lingerT = (this.lingerT || 0) + dt;
+        const left = this.units.filter(u => u.enemy);
+        if (left.length && (left.every(e => (e.idleT || 0) > STUCK_TIME) || this.lingerT > LINGER_TIME)) for (const e of left) { this.emit('guard', { unit: e }); this.destroyEnemy(e, null); }
+      }
       if (this.wave.length && this.enemiesLeft <= 0 && !this.units.some(u => u.enemy)) { this.clearT = (this.clearT || 0) + dt; if (this.clearT >= CLEAR_DELAY) this.finish('clear'); }
       if (this.players.every(p => !p.unit && p.lives <= 0)) this.finish('over');
     } else {

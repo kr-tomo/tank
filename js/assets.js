@@ -9,14 +9,23 @@ export async function loadTheme(id = 'classic') {
 }
 
 const images = new Map();
+const LOAD_TIMEOUT = 8000;
+function loadOnce(url, timeout = LOAD_TIMEOUT) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const timer = setTimeout(() => { img.src = ''; reject(new Error(`image load timed out: ${url}`)); }, timeout);
+    img.onload = () => { clearTimeout(timer); resolve(img); };
+    img.onerror = () => { clearTimeout(timer); reject(new Error(`image load failed: ${url}`)); };
+    img.src = url;
+  });
+}
+// A load that hangs or fails is retried once past the caches; a failed promise is not kept, so the next
+// scene start tries again instead of failing forever.
 export function loadImage(url) {
   if (!images.has(url)) {
-    images.set(url, new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error(`image load failed: ${url}`));
-      img.src = url;
-    }));
+    const p = loadOnce(url).catch(() => loadOnce(`${url}${url.includes('?') ? '&' : '?'}retry=${Date.now()}`));
+    p.catch(() => images.delete(url));
+    images.set(url, p);
   }
   return images.get(url);
 }

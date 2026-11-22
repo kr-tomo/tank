@@ -17,7 +17,7 @@ const stageEl = $('#stage'), controls = $('#controls'), pauseBtn = $('#pauseBtn'
 const DPAD_HTML = '<i class="arm u">▲</i><i class="arm d">▼</i><i class="arm l">◀</i><i class="arm r">▶</i><i class="hub"></i>';
 const THEME_IDS = ['classic', 'ancient', 'space', 'halloween'];
 const MODE_LABEL = { '1p': '1인 플레이', coop: '2인 협동', versus: '2인 대전', editor: '맵 편집' };
-const TOOL_NAMES = { brick: '벽돌', steel: '강철', water: '물', bush: '수풀', ice: '얼음', erase: '지우개' };
+const TOOL_NAMES = { brick: '벽돌', steel: '강철', water: '물', bush: '수풀', ice: '얼음', erase: '지우개', start: '1P/2P 시작 위치 (번갈아)', spawn: '적 등장 위치 (가장 오래된 곳 이동)' };
 const SCREENS = {
   title: { focus: '#title [data-mode]', back: null },
   setup: { focus: '#startBtn', back: () => show('title') },
@@ -251,7 +251,7 @@ function buildWorld() {
   const theme = themes[settings.theme];
   const versus = settings.mode === 'versus';
   let grid, wave = '', name = '';
-  if (customDef) { grid = Grid.parseHalf(customDef.tiles, Grid.parse(STAGES[0].map, 'coop').bases); if (customDef.mode === 'versus') grid = Grid.parseHalf(customDef.tiles, Grid.parse(VERSUS_MAPS[0].map, 'versus').bases); wave = versus ? '' : STAGES[Math.min(stageIndex, STAGES.length - 1)].wave; name = customDef.name; }
+  if (customDef) { grid = Grid.parseHalf(customDef.tiles, Grid.parse(STAGES[0].map, 'coop').bases, customDef); if (customDef.mode === 'versus') grid = Grid.parseHalf(customDef.tiles, Grid.parse(VERSUS_MAPS[0].map, 'versus').bases, customDef); wave = versus ? '' : STAGES[Math.min(stageIndex, STAGES.length - 1)].wave; name = customDef.name; }
   else if (versus) { const m = VERSUS_MAPS[settings.versusMap]; grid = parseStage(m, 'versus').grid; name = m.name; }
   else { const s = STAGES[stageIndex % STAGES.length]; ({ grid, wave } = parseStage(s, 'coop')); name = ''; }
   world = new World({ mode: versus ? 'versus' : 'coop', grid, players: input.players, wave, rules: makeRules(theme.rules), traits: theme.traits || {}, timeLimit: versus ? settings.versusTime : 0, carry, lives: settings.lives === 0 ? Infinity : settings.lives, hitMode: settings.hitMode });
@@ -261,6 +261,24 @@ function buildWorld() {
 function startStage() {
   const { theme, name } = buildWorld();
   stage.startPlay({ world, theme, view: currentView(), readInputs, stageName: name, stageIndex: customDef ? stageIndex : stageIndex % STAGES.length, onPhase });
+  watch = { since: performance.now(), lastTime: -1, lastChange: performance.now(), retries: watch?.world === world ? watch.retries : 0, world };
+}
+
+// Watchdog: a stage that never becomes ready, or a running world whose clock stops advancing while nothing
+// is paused, gets its scene rebuilt (twice at most) instead of sitting frozen.
+let watch = null;
+function watchdog() {
+  if (!watch || !playing || !world || world !== watch.world || world.phase !== 'play') return;
+  const now = performance.now(), sc = stage.game.scene.getScene('play');
+  if (paused || document.hidden) { watch.lastChange = now; watch.since = now; return; }   // a pause is not a freeze
+  const stuck = (!sc?.ready && now - watch.since > 12000) || (sc?.ready && sc.curtainT <= 0 && now - watch.lastChange > 4000);
+  if (world.time !== watch.lastTime) { watch.lastTime = world.time; watch.lastChange = now; }
+  if (!stuck) return;
+  if (watch.retries >= 2) { report('watchdog', new Error('게임 화면이 멈춰 다시 시작하지 못했습니다')); watch = null; return; }
+  console.warn('watchdog: rebuilding the play scene');
+  const { theme } = { theme: themes[settings.theme] };
+  stage.startPlay({ world, theme, view: currentView(), readInputs, stageName: '', stageIndex: customDef ? stageIndex : stageIndex % STAGES.length, onPhase });
+  watch = { since: now, lastTime: -1, lastChange: now, retries: watch.retries + 1, world };
 }
 
 // a finished stage: fire/A continues (next stage, or back to the menu after a game over)
@@ -311,7 +329,8 @@ function openEditor(model, id, name) {
 
 function buildEditorBar() {
   const theme = themes[settings.theme];
-  $('#editorBar .tools').innerHTML = TOOLS.map(t => `<button data-tool="${t}" title="${TOOL_NAMES[t]}">${t === 'erase' ? '✕' : frameImg(theme, 'tiles', theme.frames.tiles[t === 'water' ? 'water0' : t])}</button>`).join('');
+  const icon = t => t === 'erase' ? '✕' : t === 'start' ? frameImg(theme, 'units', theme.frames.units.p1[0], 32) : t === 'spawn' ? frameImg(theme, 'units', theme.frames.units.basic[0], 32) : frameImg(theme, 'tiles', theme.frames.tiles[t === 'water' ? 'water0' : t]);
+  $('#editorBar .tools').innerHTML = TOOLS.map(t => `<button data-tool="${t}" title="${TOOL_NAMES[t]}" class="${t === 'start' || t === 'spawn' ? 'marker' : ''}">${icon(t)}</button>`).join('');
   for (const b of $$('#editorBar .tools button')) b.onclick = () => { editor.tool = b.dataset.tool; refreshEditorBar(); };
   $('#brushBtn').onclick = () => { editor.toggleBrush(); refreshEditorBar(); };
   $('#saveMapBtn').onclick = saveMap;
@@ -433,6 +452,7 @@ function frame(ts) {
   input.pollPads();
   nav.poll(dt, input.pads());
   pollPhase();
+  watchdog();
 }
 
 const report = (where, e) => { console.error(where, e); window.__fatal?.(`${where}: ${e?.stack || e?.message || e}`); };

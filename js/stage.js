@@ -509,7 +509,8 @@ class PlayScene extends Phaser.Scene {
         case 'cancel': this.fx.spark.explode(8, e.x, e.y); this.flashStar(e.x, e.y, 0.5, 0xffffff); this.sfx('hit', { volume: 0.35 }); break;
         case 'damage': this.fx.spark.explode(10, e.x, e.y); this.flashStar(e.x, e.y, 0.6, 0xffe0a0); this.sfx('hit', { volume: 0.5 }); cam.shake(60, 0.003); break;
         case 'ricochet': this.fx.steel.explode(10, e.x, e.y); this.ring(e.unit.x, e.unit.y, 0x9fe0ff, 0.9); this.sfx('ricochet', { volume: 0.5 }); break;
-        case 'stun': this.popText('!', e.unit.x, e.unit.y - 20, '#ffd27a', 16); this.sfx('stun', { volume: 0.5 }); break;
+        case 'stun': this.popText(e.streak > 1 ? '!'.repeat(Math.min(3, e.streak)) : '!', e.unit.x, e.unit.y - 20, e.streak >= 2 ? '#ff8a5a' : '#ffd27a', 16 + (e.streak || 1) * 2); this.sfx('stun', { volume: 0.5, rate: 1 + (e.streak || 1) * 0.15 }); break;
+        case 'guard': this.popText('제거', e.unit.x, e.unit.y - 22, '#bbb', 12); break;
         case 'explode': {
           const big = e.big;
           this.fx.spark.explode(big ? 40 : 22, e.x, e.y);
@@ -577,16 +578,16 @@ export class Stage {
   resize(pw, ph) { if (this.game.scale.width !== pw || this.game.scale.height !== ph) this.game.scale.resize(pw, ph); }
   startPlay(data) { this.stopAll(); this.current = 'play'; this.game.scene.start('play', data); }
   startEditor(data) { this.stopAll(); this.current = 'editor'; this.game.scene.start('editor', data); }
-  stopAll() { this.current = null; for (const k of ['play', 'editor']) if (this.game.scene.isActive(k) || this.game.scene.isPaused(k)) this.game.scene.stop(k); }
+  stopAll() { this.current = null; this.pendingPause = null; for (const k of ['play', 'editor']) if (this.game.scene.isActive(k) || this.game.scene.isPaused(k)) this.game.scene.stop(k); }
   // pauses the running scene; a scene that was just started pauses as soon as it has been created
   pause() {
     const k = this.current;
     if (!k) return;
     if (this.game.scene.isActive(k)) this.game.scene.pause(k);
-    else this.game.scene.getScene(k)?.events.once('create', () => { if (this.current === k && !this.game.scene.isPaused(k)) this.game.scene.pause(k); });
+    else { this.pendingPause = k; this.game.scene.getScene(k)?.events.once('create', () => { if (this.pendingPause === k && this.current === k && !this.game.scene.isPaused(k)) this.game.scene.pause(k); this.pendingPause = null; }); }
     this.game.sound.pauseAll();
   }
-  resume() { for (const k of ['play', 'editor']) if (this.game.scene.isPaused(k)) this.game.scene.resume(k); this.game.sound.resumeAll(); }
+  resume() { this.pendingPause = null; for (const k of ['play', 'editor']) if (this.game.scene.isPaused(k)) this.game.scene.resume(k); this.game.sound.resumeAll(); }
   setMuted(v) { this.muted = v; this.game.sound.mute = v; }
   play(key, cfg) { if (!this.game.sound.locked && this.game.cache.audio.exists(key)) this.game.sound.play(key, { volume: 0.5, ...cfg }); }
 }
