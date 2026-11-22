@@ -10,10 +10,16 @@ export const STAR_DEFAULT = {
   arc:      { 1: { cooldownMul: 0.6 }, 2: { rangeBonus: 2, splash: 3 }, 3: { steel: true } },
   beam:     { 1: { overheat: 0.3 }, 2: { burst: 2 }, 3: { steel: true, pierce: true } }
 };
-const RANGE = { arc: 8, beam: 7, homing: 10 };   // half cells
-const BEAM_LIFE = 0.12;
+const RANGE = { arc: 8 };   // half cells
+// Will-o'-wisp: weaves along its lane, flies straight for `straight` tiles, then homes on the nearest hostile
+// inside a ±cone, turning at most `turn` deg/s, and fades after `range` tiles.
+export const WISP = { amp: 5, period: 32, straight: 4, cone: 45, turn: 150, range: 8 };
+// Laser: a bolt that crosses 4 tiles in 0.5 s, cancels against other lasers, and reflects off hull plating
+// (steel outside the fortress) up to `bounces` times, each reflection giving `legAfter` tiles of reach.
+export const BEAM = { speed: 768, range: 4, legAfter: 3, bounces: 2, width: 10 };
 const ANGLE = { right: 0, down: Math.PI / 2, left: Math.PI, up: -Math.PI / 2 };
 const CW = { up: 'right', right: 'down', down: 'left', left: 'up' };
+const CCW = { up: 'left', left: 'down', down: 'right', right: 'up' };
 const EPS = 1e-6;
 
 export function makeRules(o = {}) {
@@ -103,18 +109,21 @@ export function fire(unit, rules, world) {
     p.flight = 0.12 + dist / UNIT * 0.07;
     p.splash = fx.splash || 2;
   } else if (rules.kind === 'beam') {
-    p.range = rules.range || RANGE.beam;
+    p.speed = BEAM.speed * (fx.speed || 1);
+    p.left = (rules.range || BEAM.range) * UNIT;    // reach of the current leg, px
     p.reflect = !!rules.reflect;
     p.pierce = !!fx.pierce;
-    p.life = BEAM_LIFE;
+    p.bounces = 0; p.dirs = [unit.dir]; p.path = [{ x: f.x, y: f.y }]; p.hitUnits = new Set();   // path: muzzle, every corner; the head is p.x/p.y
+    p.w = p.h = BEAM.width;
+    p.x = f.x; p.y = f.y;
     const burst = fx.burst || 1;
     unit.burstLeft = (unit.burstLeft ?? burst) - 1;
     if (unit.burstLeft <= 0) { unit.heatUntil = world.time + (fx.overheat ?? rules.overheat ?? 0.5); unit.burstLeft = burst; }
   } else if (rules.kind === 'homing') {
     p.angle = ANGLE[unit.dir];
-    p.rate = (rules.homing ?? 10) * Math.PI / 180;
-    p.range = (rules.range || RANGE.homing) * U;
-    p.travelled = 0;
+    p.rate = (rules.homing || WISP.turn) * Math.PI / 180;
+    p.range = (rules.range || WISP.range) * UNIT;
+    p.travelled = 0; p.cx = f.x; p.cy = f.y; p.target = null;
   }
   return p;
 }
@@ -151,7 +160,7 @@ function hitSomething(p, world) {
     return [{ type: unit.team === p.team ? 'hitFriend' : 'hitUnit', unit, x: p.x, y: p.y, shot: p }];
   }
   if (p.cancel) {
-    const other = shots.find(s => s !== p && s.alive && s.team !== p.team && s.cancel && (s.kind === 'straight' || s.kind === 'homing') && overlaps(p, s));
+    const other = shots.find(s => s !== p && s.alive && s.team !== p.team && s.cancel && (s.kind === 'straight' || s.kind === 'homing' || s.kind === 'beam') && overlaps(p, s));
     if (other) { p.alive = false; other.alive = false; return [{ type: 'cancel', x: p.x, y: p.y, shot: p, other }]; }
   }
   return null;
@@ -172,26 +181,32 @@ function stepStraight(p, dt, world) {
 }
 
 function stepHoming(p, dt, world) {
-  // steer toward the nearest hostile inside the ±45° cone ahead
-  let best = null, bd = Infinity;
-  for (const u of world.units) {
-    if (u.team === p.team || u.dead) continue;
-    const ang = Math.atan2(u.y - p.y, u.x - p.x);
-    let diff = ang - p.angle;
-    while (diff > Math.PI) diff -= 2 * Math.PI;
-    while (diff < -Math.PI) diff += 2 * Math.PI;
-    const d = Math.hypot(u.x - p.x, u.y - p.y);
-    if (Math.abs(diff) <= Math.PI / 4 && d < bd) { bd = d; best = diff; }
-  }
-  if (best !== null) p.angle += Math.sign(best) * Math.min(Math.abs(best), p.rate * dt);
+  // after the straight run, home on the nearest hostile inside the cone; the lock drops when it leaves the cone
+  if (p.travelled >= WISP.straight * UNIT) {
+    const cone = WISP.cone * Math.PI / 180;
+    const bearing = u => { let d = Math.atan2(u.y - p.cy, u.x - p.cx) - p.angle; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
+    if (p.target && (p.target.dead || Math.abs(bearing(p.target)) > cone)) p.target = null;
+    if (!p.target) {
+      let best = null, bd = Infinity;
+      for (const u of world.units) {
+        if (u.team === p.team || u.dead || u.spawnT > 0) continue;
+        const d = Math.hypot(u.x - p.cx, u.y - p.cy);
+        if (Math.abs(bearing(u)) <= cone && d < bd) { bd = d; best = u; }
+      }
+      p.target = best;
+    }
+    if (p.target) { const diff = bearing(p.target); p.angle += Math.sign(diff) * Math.min(Math.abs(diff), p.rate * dt); }
+  } else p.target = null;
   const d = p.speed * dt, n = Math.max(1, Math.ceil(d / (U / 2)));
   for (let i = 0; i < n; i++) {
-    p.x += Math.cos(p.angle) * d / n; p.y += Math.sin(p.angle) * d / n;
+    p.cx += Math.cos(p.angle) * d / n; p.cy += Math.sin(p.angle) * d / n; p.travelled += d / n;
+    // the weave: a sine offset across the heading
+    const off = Math.sin(p.travelled / WISP.period * 2 * Math.PI) * WISP.amp;
+    p.x = p.cx - Math.sin(p.angle) * off; p.y = p.cy + Math.cos(p.angle) * off;
     p.dir = Math.abs(Math.cos(p.angle)) > Math.abs(Math.sin(p.angle)) ? (Math.cos(p.angle) > 0 ? 'right' : 'left') : (Math.sin(p.angle) > 0 ? 'down' : 'up');
     const ev = hitSomething(p, world);
     if (ev) return ev;
   }
-  p.travelled += d;
   if (p.travelled >= p.range || p.x < -U || p.y < -U || p.x > world.grid.width + U || p.y > world.grid.height + U) { p.alive = false; return [{ type: 'expire', shot: p }]; }
   return [];
 }
@@ -215,45 +230,88 @@ function stepArc(p, dt, world) {
   return ev;
 }
 
-function stepBeam(p, dt, world) {
-  if (!p.segments) {
-    const { grid, units } = world;
-    const hitUnits = new Set();
-    const target = u => u !== p.owner && !u.dead && !(u.spawnT > 0) && !u.phased && !hitUnits.has(u) && (u.team !== p.team || u.player !== undefined);
-    const ev = [];
-    p.segments = [];
-    let from = { x: p.x, y: p.y }, dir = p.dir, left = p.range, bounced = false;
-    while (left > 0) {
-      const hit = raycast(grid, units, from, dir, left, { target, base: true });
-      const [dx, dy] = DIRS[dir];
-      const end = hit.kind === 'wall' ? { x: hit.x - dx * U / 2, y: hit.y - dy * U / 2 } : { x: hit.x, y: hit.y };
-      p.segments.push({ x0: from.x, y0: from.y, x1: end.x, y1: end.y, dir });
-      if (hit.kind === 'unit') { hitUnits.add(hit.unit); ev.push({ type: hit.unit.team === p.team ? 'hitFriend' : 'hitUnit', unit: hit.unit, x: hit.x, y: hit.y, shot: p }); if (!p.pierce) break; }
-      else if (hit.kind === 'base') { ev.push({ type: 'hitBase', base: hit.base, x: hit.x, y: hit.y, shot: p }); break; }
-      else if (hit.kind === 'wall') {
-        const steel = grid.cellAt(hit.cx, hit.cy) === 'steel';
-        const strip = { ...p, dir, x: hit.x, y: hit.y, depth: 1 };
-        ev.push({ type: 'hitWall', x: hit.x, y: hit.y, cells: wallStrip(strip, grid, [[hit.cx, hit.cy]]), steel: p.steel, shot: p });
-        if (steel && p.reflect && !bounced && !grid.inFortress(hit.cx, hit.cy) && !p.steel) {
-          bounced = true;
-          from = { x: hit.x - dx * U, y: hit.y - dy * U };   // the last free step
-          dir = CW[dir];
-          left -= Math.round(hit.dist / U);
-          continue;
-        }
-        break;
-      } else break;
-      left -= Math.round(hit.dist / U);
-      from = end;
-    }
-    p.events = ev;
-    p.t = 0;
-    return ev;
-  }
-  p.t += dt;
-  if (p.t >= p.life) { p.alive = false; return [{ type: 'expire', shot: p }]; }
-  return [];
+// axis-aligned rect of a path segment, `w` wide
+function segRect(a, b, w) {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, w: Math.abs(b.x - a.x) + w, h: Math.abs(b.y - a.y) + w };
 }
+// every segment of a laser (path corners + the head)
+export function beamSegments(p) {
+  const pts = [...p.path, { x: p.x, y: p.y }], out = [];
+  for (let i = 1; i < pts.length; i++) out.push([pts[i - 1], pts[i]]);
+  return out;
+}
+// cut a laser at point c on its segment i: everything past the crossing is voided
+function cutBeam(p, i, c) {
+  p.path = p.path.slice(0, i + 1);
+  p.x = c.x; p.y = c.y;
+  p.alive = false;
+}
+
+function stepBeam(p, dt, world) {
+  const { grid, units, shots } = world;
+  const d = p.speed * dt, n = Math.max(1, Math.ceil(d / 4));
+  const ev = [];
+  const target = u => u !== p.owner && !u.dead && !p.hitUnits.has(u) && !(u.spawnT > 0) && !u.phased && (u.team !== p.team || u.player !== undefined);
+  for (let i = 0; i < n; i++) {
+    const [dx, dy] = DIRS[p.dir], step = d / n;
+    p.x += dx * step; p.y += dy * step; p.left -= step;
+    // walls at the head
+    const cells = cellsAt(p.x, p.y, p.w, p.h);
+    const walls = cells.filter(([cx, cy]) => grid.blocksShot(cx, cy));
+    if (walls.length) {
+      const [cx, cy] = walls[0];
+      const steel = grid.cellAt(cx, cy) === 'steel';
+      ev.push({ type: 'hitWall', x: p.x, y: p.y, cells: wallStrip({ ...p, depth: 1 }, grid, walls), steel: p.steel, shot: p });
+      if (steel && p.reflect && !p.steel && p.bounces < BEAM.bounces && grid.inside(cx, cy) && !grid.inFortress(cx, cy)) {
+        // Reflect toward the side of the 32px block the bolt is offset to (right-positive across the
+        // heading); a dead-center hit alternates. The bolt backs out of the wall and leaves along the face.
+        const bx = (cx >> 1) * UNIT + UNIT / 2, by = (cy >> 1) * UNIT + UNIT / 2;
+        const rx = -dy, ry = dx;
+        const off = (p.x - bx) * rx + (p.y - by) * ry;
+        let side;
+        if (Math.abs(off) < 1) { world.beamFlip = !world.beamFlip; side = world.beamFlip ? 1 : -1; } else side = Math.sign(off);
+        const turned = side > 0 ? CW[p.dir] : CCW[p.dir];
+        p.x -= dx * step; p.y -= dy * step;
+        p.dir = turned; p.dirs.push(turned); p.bounces++; p.left = BEAM.legAfter * UNIT; p.side = side; p.off = Math.abs(off);
+        p.path.push({ x: p.x, y: p.y });
+        ev.push({ type: 'reflect', x: p.x, y: p.y, dir: turned, shot: p });
+        continue;
+      }
+      p.alive = false; return ev;
+    }
+    // another laser's trail: both are voided past the crossing
+    const head = { x: p.x, y: p.y, w: p.w, h: p.h };
+    for (const s of shots) {
+      if (s === p || !s.alive || s.kind !== 'beam' || s.team === p.team) continue;
+      const segs = beamSegments(s);
+      for (let k = 0; k < segs.length; k++) {
+        const [a, b] = segs[k];
+        if (!overlaps(head, segRect(a, b, s.w))) continue;
+        // crossing point: the head projected onto that segment
+        const c = a.x === b.x ? { x: a.x, y: p.y } : { x: p.x, y: a.y };
+        cutBeam(s, k, c);
+        p.alive = false;
+        ev.push({ type: 'cancel', x: c.x, y: c.y, shot: p, other: s });
+        return ev;
+      }
+    }
+    // the base and units: at the head and anywhere along the trail
+    const bi = grid.bases.findIndex(b => overlaps(head, baseRect(b)) || beamSegments(p).some(([a, c]) => overlaps(segRect(a, c, p.w), baseRect(b))));
+    if (bi >= 0) { p.alive = false; ev.push({ type: 'hitBase', base: bi, x: p.x, y: p.y, shot: p }); return ev; }
+    const rects = [head, ...beamSegments(p).map(([a, c]) => segRect(a, c, p.w))];
+    for (const u of units) {
+      if (!target(u)) continue;
+      const r = rects.find(rc => overlaps(rc, u));
+      if (!r) continue;
+      p.hitUnits.add(u);
+      ev.push({ type: u.team === p.team ? 'hitFriend' : 'hitUnit', unit: u, x: u.x, y: u.y, shot: p });
+      if (!p.pierce && r === head) { p.alive = false; return ev; }
+    }
+    if (p.left <= 0 || p.x < -U || p.y < -U || p.x > grid.width + U || p.y > grid.height + U) { p.alive = false; ev.push({ type: 'expire', shot: p }); return ev; }
+  }
+  return ev;
+}
+
 
 export function stepProjectile(p, dt, world) {
   if (!p.alive) return [];

@@ -1,7 +1,7 @@
 {
   "id": "space",
   "name": "우주 함대전",
-  "desc": "레이저는 즉시 닿고, 장갑에서 튕긴다",
+  "desc": "레이저가 장갑에서 두 번 튕긴다",
   "palette": {
     "bg": "#05070f",
     "hud": "#1e2a44",
@@ -29,10 +29,10 @@
   },
   "rules": {
     "kind": "beam",
-    "range": 7,
+    "range": 4,
     "overheat": 0.5,
     "reflect": true,
-    "cancel": false
+    "cancel": true
   },
   "traits": {
     "fast": "dodge",

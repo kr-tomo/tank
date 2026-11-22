@@ -305,7 +305,7 @@ function pollPhase() {
 function setPaused(v, screen = 'pause') {
   if (!(playing || editing)) return;
   paused = v;
-  if (v) { stage.pause(); stage.play('pause', { volume: 0.4 }); show(screen); }
+  if (v) { stage.pause(); stage.play('pause', { volume: 0.4 }); $('#editorQuitBtn').hidden = !(playing && editorId && editorId !== 'new'); show(screen); }
   else { show(null); stage.resume(); input.pointers.clear(); input.dpads.clear(); }
 }
 
@@ -500,6 +500,7 @@ async function boot() {
   $('#resumeBtn').onclick = () => setPaused(false);
   $('#quitBtn').onclick = () => setPaused(true, 'confirm');
   $('#confirmQuitBtn').onclick = quitToMenu;
+  $('#editorQuitBtn').onclick = quitToEditor;
   $('#cancelQuitBtn').onclick = () => setPaused(false);
   addEventListener('pointerdown', () => document.body.classList.remove('nav'));
   addEventListener('resize', onResize);

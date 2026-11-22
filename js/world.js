@@ -14,7 +14,8 @@ const CRUSH_TIME = 0.5;
 const HIT_GRACE = 1;        // damage mode: seconds of invulnerability after a hit
 const FRIENDLY_STREAK = 3;  // friendly hits in one stun that destroy the tank
 const STUCK_TIME = 8;       // a last enemy that has not moved this long is removed so the stage can end
-const LINGER_TIME = 60;     // …or any leftover enemies this long after the wave ran out
+const LINGER_TIME = 60;
+const RELOCATE_RADIUS = 8;  // tiles searched for a free spot when a ghost solidifies inside a wall     // …or any leftover enemies this long after the wave ran out
 const tileCenter = ([tx, ty]) => ({ x: tx * TILE + TILE / 2, y: ty * TILE + TILE / 2 });
 
 // mulberry32
@@ -275,6 +276,7 @@ export class World {
       else if (e.phaseT <= 0) { e.phased = !e.phased; e.phaseT = PHASE_PERIOD; this.emit(e.phased ? 'phase' : 'solidify', { unit: e }); }
       if (!e.phased) this.unstick(e);
     }
+    if (!e.phased && e.spawnT <= 0 && unitCells(e).some(([cx, cy]) => this.grid.blocksUnit(cx, cy))) { this.unstick(e); if (e.dead) return; }
     const d = decide(e, this, dt);
     const px = e.x, py = e.y;
     const r = this.moveUnit(e, d.dir, dt);
@@ -300,12 +302,20 @@ export class World {
     return unitCells({ x: dx ? x : u.x, y: dy ? y : u.y, w: dx ? 1 : UNIT, h: dy ? 1 : UNIT });
   }
 
-  // a ghost that turns solid inside a brick is pushed back the way it came
+  // A ghost that turns solid inside terrain (or on another unit) moves to the nearest free lane spot;
+  // with nothing free within RELOCATE_RADIUS it is removed so the wave can go on.
   unstick(e) {
-    for (let k = 0; k < 8 && !freeAt(e, e.x, e.y, this.grid, this.units); k++) {
-      const [dx, dy] = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[e.dir];
-      e.x -= dx * U; e.y -= dy * U;
+    const others = this.units.filter(u => u !== e);
+    if (freeAt(e, e.x, e.y, this.grid, others)) return;
+    const sx = Math.round(e.x / U) * U, sy = Math.round(e.y / U) * U, R = RELOCATE_RADIUS * UNIT;
+    let best = null, bd = Infinity;
+    for (let y = sy - R; y <= sy + R; y += U) for (let x = sx - R; x <= sx + R; x += U) {
+      const d = Math.hypot(x - e.x, y - e.y);
+      if (d >= bd || x < UNIT / 2 || y < UNIT / 2 || x > this.grid.width - UNIT / 2 || y > this.grid.height - UNIT / 2) continue;
+      if (freeAt(e, x, y, this.grid, others)) { best = [x, y]; bd = d; }
     }
+    if (best) { e.x = best[0]; e.y = best[1]; this.emit('relocate', { unit: e }); }
+    else { this.emit('guard', { unit: e }); this.destroyEnemy(e, null); }
   }
 
   /* ---------- the tick ---------- */

@@ -113,7 +113,7 @@ footer { justify-content: flex-end; }
 .maplist .item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 2px solid var(--line); border-radius: 10px; background: var(--panel); }
 .maplist .item b { flex: 1; font-size: calc(var(--u) * 2); }
 .maplist .item small { color: var(--muted); }
-.maplist .item button { padding: 6px 10px; font-size: calc(var(--u) * 1.8); border-radius: 8px; }
+.maplist .item button { padding: 6px 10px; font-size: calc(var(--u) * 1.8); border-radius: 8px; background: var(--panel); border: 2px solid var(--line); color: var(--text); }
 .maplist .empty { color: var(--muted); text-align: center; padding: 20px; }
 
 #editorBar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; padding: 6px max(env(safe-area-inset-right), 8px) max(env(safe-area-inset-bottom), 8px) max(env(safe-area-inset-left), 8px); background: rgba(10, 8, 14, .85); }

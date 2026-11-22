@@ -30,7 +30,7 @@ function aimingPlayer(e, world) {
 function incomingShot(e, world) {
   if (world.rules?.kind === 'beam' && aimingPlayer(e, world)) return true;
   return world.shots.find(s => {
-    if (!s.alive || s.team === e.team || (s.kind !== 'straight' && s.kind !== 'homing')) return false;
+    if (!s.alive || s.team === e.team || s.kind === 'arc') return false;
     const [dx, dy] = DIRS[s.dir];
     if (dx && Math.abs(s.y - e.y) < UNIT / 2 + 4) { const d = (e.x - s.x) * dx; return d > 0 && d < DODGE_RANGE; }
     if (dy && Math.abs(s.x - e.x) < UNIT / 2 + 4) { const d = (e.y - s.y) * dy; return d > 0 && d < DODGE_RANGE; }

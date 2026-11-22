@@ -30,8 +30,8 @@
   "rules": {
     "kind": "homing",
     "speed": 0.85,
-    "homing": 10,
-    "range": 10,
+    "homing": 150,
+    "range": 8,
     "cancel": true
   },
   "traits": {

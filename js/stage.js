@@ -8,6 +8,7 @@ import { HUD_SIDE, HUD_TOP } from './layout.js';
 import { EditorScene } from './editorscene.js';
 
 const STEP = 1 / 120;
+const BEAM_FADE = 0.18;
 const MAX_TEX = 4096;
 const FONT = '"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif';
 const MONO = '"Menlo","SF Mono","Courier New",monospace';
@@ -98,7 +99,7 @@ class PlayScene extends Phaser.Scene {
     this.ready = false; this.acc = 0; this.t = 0; this.gridDirty = true; this.waterPhase = 0; this.tickSoundT = 0;
     this.unitSprites = new Map(); this.shotSprites = new Map(); this.itemSprites = new Map(); this.texts = [];
     this.lastPhase = 'play'; this.curtainT = 0; this.resultShown = false;
-    this.beams = []; this.tally = null; this.loadToken = (this.loadToken || 0) + 1;
+    this.beams = []; this.fading = []; this.tally = null; this.loadToken = (this.loadToken || 0) + 1;
   }
 
   create() {
@@ -417,7 +418,7 @@ class PlayScene extends Phaser.Scene {
     this.shadowGfx.clear();
     for (const p of w.shots) {
       seenShots.add(p);
-      if (p.kind === 'beam') { this.drawBeam(p); continue; }
+      if (p.kind === 'beam') { this.drawBolt(p); continue; }
       let s = this.shotSprites.get(p);
       if (!s) { s = this.add.image(p.x, p.y, sh.shot.key, 's0').setScale(1 / sh.shot.k); this.shotLayer.add(s); this.shotSprites.set(p, s); }
       if (p.kind === 'arc') {
@@ -432,7 +433,9 @@ class PlayScene extends Phaser.Scene {
       }
     }
     for (const [p, s] of this.shotSprites) if (!seenShots.has(p)) { s.destroy(); this.shotSprites.delete(p); }
-    for (const p of this.beams || []) this.drawBeam(p);
+    // dead lasers fade
+    for (const f of this.fading) { f.t += dt; this.drawBolt(f.p, Math.max(0, 1 - f.t / BEAM_FADE)); }
+    this.fading = this.fading.filter(f => f.t < BEAM_FADE);
 
     // items
     const seenItems = new Set();
@@ -453,14 +456,20 @@ class PlayScene extends Phaser.Scene {
     this.updateHud();
   }
 
-  drawBeam(p) {
-    if (!p.segments) return;
-    const a = clamp(1 - p.t / p.life, 0, 1), col = hex(this.theme.palette.accent);
-    for (const sgm of p.segments) {
-      this.beamGfx.lineStyle(7, col, 0.25 * a).lineBetween(sgm.x0, sgm.y0, sgm.x1, sgm.y1);
-      this.beamGfx.lineStyle(3, col, 0.8 * a).lineBetween(sgm.x0, sgm.y0, sgm.x1, sgm.y1);
-      this.beamGfx.lineStyle(1.2, 0xffffff, a).lineBetween(sgm.x0, sgm.y0, sgm.x1, sgm.y1);
+  // a laser: its whole path (muzzle, corners, head) stays lit as a straight beam while the bolt lives;
+  // a dead beam fades out over BEAM_FADE seconds
+  drawBolt(p, alpha = 1) {
+    const col = hex(this.theme.palette.accent), pts = [...p.path, { x: p.x, y: p.y }];
+    for (let i = 1; i < pts.length; i++) {
+      this.beamGfx.lineStyle(10, col, 0.22 * alpha).lineBetween(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y);
+      this.beamGfx.lineStyle(4.5, col, 0.75 * alpha).lineBetween(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y);
+      this.beamGfx.lineStyle(1.8, 0xffffff, 0.95 * alpha).lineBetween(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y);
     }
+    if (alpha >= 1) this.beamGfx.fillStyle(0xffffff, 0.95).fillCircle(p.x, p.y, 3).fillStyle(col, 0.5).fillCircle(p.x, p.y, 6);
+  }
+  fadeBeam(p) {
+    if (!p || p.alive || this.fading.some(f => f.p === p)) return;
+    this.fading.push({ p: { path: p.path.map(q => ({ ...q })), x: p.x, y: p.y }, t: 0 });
   }
 
   /* ---------- world events → effects ---------- */
@@ -489,12 +498,13 @@ class PlayScene extends Phaser.Scene {
   handleEvents() {
     const w = this.world, cam = this.cameras.main, th = this.theme, ex = th.palette.explosion.map(hex);
     for (const e of w.events) {
+      if (e.shot?.kind === 'beam') { this.fadeBeam(e.shot); if (e.other?.kind === 'beam') this.fadeBeam(e.other); }
       switch (e.type) {
         case 'fire': {
           const u = e.unit, d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[u.dir];
           this.flashStar(u.x + d[0] * 18, u.y + d[1] * 18, 0.5, ex[0]);
           this.recoil(u);
-          if (e.shot.kind === 'beam') { this.beams = [...(this.beams || []).filter(b => b.alive), e.shot]; this.sfx('beam', { volume: 0.5 }); }
+          if (e.shot.kind === 'beam') this.sfx('beam', { volume: 0.5 });
           else this.sfx(th.sfx.fire, { volume: u.player !== undefined ? 0.5 : 0.3, rate: rnd(0.95, 1.08) });
           break;
         }
@@ -507,6 +517,7 @@ class PlayScene extends Phaser.Scene {
           break;
         }
         case 'cancel': this.fx.spark.explode(8, e.x, e.y); this.flashStar(e.x, e.y, 0.5, 0xffffff); this.sfx('hit', { volume: 0.35 }); break;
+        case 'reflect': this.fx.steel.explode(8, e.x, e.y); this.flashStar(e.x, e.y, 0.55, 0x9fe0ff); this.sfx('ricochet', { volume: 0.45, rate: 1.2 }); break;
         case 'damage': this.fx.spark.explode(10, e.x, e.y); this.flashStar(e.x, e.y, 0.6, 0xffe0a0); this.sfx('hit', { volume: 0.5 }); cam.shake(60, 0.003); break;
         case 'ricochet': this.fx.steel.explode(10, e.x, e.y); this.ring(e.unit.x, e.unit.y, 0x9fe0ff, 0.9); this.sfx('ricochet', { volume: 0.5 }); break;
         case 'stun': this.popText(e.streak > 1 ? '!'.repeat(Math.min(3, e.streak)) : '!', e.unit.x, e.unit.y - 20, e.streak >= 2 ? '#ff8a5a' : '#ffd27a', 16 + (e.streak || 1) * 2); this.sfx('stun', { volume: 0.5, rate: 1 + (e.streak || 1) * 0.15 }); break;
